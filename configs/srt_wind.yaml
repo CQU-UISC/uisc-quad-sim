@@ -1,0 +1,19 @@
+nums: 1
+g: 9.81
+quadrotor: "xi35.yaml"
+dt: 0.01
+control_mode: "SRT" # "CTBR" or "CTBM" or "SRT" 
+noise_std:  [0.01,0.01,0.01, #pos
+              0.01,0.01,0.01, #vel
+              0.001,0.001,0.001,0.001, #quaternion
+              0.001,0.001,0.001 #ang_vel
+            ]
+disturbance:
+  type: "wind" # "empty" "wind" "timevar" "const"
+  force: [0,0,0]
+  moment: [0,0,0]
+  pos: [0,1.5,1.2]
+  to: [0,1,1]
+  vmax: 7
+  radius: 0.3
+  noisevar: 0.1
