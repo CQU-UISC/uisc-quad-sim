@@ -16,8 +16,7 @@ class DroneVisualizer:
                 rr.blueprint.Vertical(
                     rr.blueprint.Spatial3DView(origin="/world",
                                                contents=[
-                                                   "/world/drone/odom",
-                                                   "/world/drone/path",
+                                                   "/world/drone/**",
                                                ],
                                                 name="3D View"),
                     # rr.blueprint.TextDocumentView(origin="/logs", name="Logs"),

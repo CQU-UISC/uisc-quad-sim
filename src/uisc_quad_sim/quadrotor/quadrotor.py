@@ -20,6 +20,8 @@ class Quadrotor:
                 thrust_map:np.ndarray,#thrust map[c2,c1,c0]
                 thrust_max:float,#N
                 thrust_min:float,#N 
+                omega_min:np.ndarray,#rad/s
+                omega_max:np.ndarray#rad/s
                 ):
         assert mass > 0, "mass should be positive"
         assert np.all(inertia > 0), "inertia should be positive"
@@ -28,6 +30,8 @@ class Quadrotor:
         assert kappa > 0, "kappa should be positive"
         assert len(thrust_map) == 3, "thrust_map should be 3x1"
         assert len(drag_coeff) == 3, "drag_coeff should be 3x1"
+        assert len(omega_min) == 3, "omega_min should be 3x1"
+        assert len(omega_max) == 3, "omega_max should be 3x1"
         self.name = name
         self.mass = mass
         self.J = np.diag(inertia)
@@ -41,6 +45,8 @@ class Quadrotor:
         self.thrust_map = thrust_map
         self.thrust_max = thrust_max
         self.thrust_min = thrust_min
+        self.omega_min = omega_min
+        self.omega_max = omega_max
         self.tbm = self.arm_length*(0.5)**0.5*np.array([[1,-1,-1,1],[-1,-1,1,1],[0,0,0,0]])
         self.tbm[2,:] = self.kappa*np.array([1,-1,1,-1])
         # Init variables
@@ -51,7 +57,11 @@ class Quadrotor:
         # B@[t1,t2,t3,t4] 
         self.B_inv = np.linalg.pinv(self.B)
         self.drag_coeff = drag_coeff
-
+        arm_l_xy = self.arm_length*(0.5)**0.5
+        self.max_torque = np.array([2*arm_l_xy*self.thrust_max,
+                                    2*arm_l_xy*self.thrust_max,
+                                    2*self.kappa*self.thrust_max])
+        self.min_torque = -self.max_torque
     def __str__(self):
         return f'''Quadrotor {self.name}
     Mass: {self.mass} kg
@@ -97,6 +107,8 @@ class Quadrotor:
         thrust_map = np.array(cfg['motors']['thrust_map'])
         thrust_max:float = cfg['motors']['thrust_max']
         thrust_min:float = cfg['motors']['thrust_min']
+        omega_min:np.ndarray = np.array( cfg['limits']['omega_min'])
+        omega_max:np.ndarray = np.array( cfg['limits']['omega_max'])
         return Quadrotor(    name,
                         mass,
                         inertia,
@@ -108,7 +120,9 @@ class Quadrotor:
                         motor_time_constant,
                         thrust_map,
                         thrust_max,
-                        thrust_min)
+                        thrust_min,
+                        omega_min,
+                        omega_max)
     
     def clipMotorSpeed(self,omega):
         '''

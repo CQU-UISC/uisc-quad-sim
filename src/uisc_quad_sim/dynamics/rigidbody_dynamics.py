@@ -5,7 +5,7 @@ from .disturbance import Disturbance
 '''
 quadrotor dynamics
 '''
-# @nb.njit()
+@nb.njit()
 def quadrotor_dynamics(x:np.ndarray,
                        x_dot:np.ndarray,
                        u:np.ndarray,

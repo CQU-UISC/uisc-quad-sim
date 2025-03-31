@@ -19,5 +19,3 @@ motors:
 limits:
     omega_max: [6.0, 6.0, 4.0] # rad/s
     omega_min: [-6.0, -6.0, -4.0] # rad/s
-    thrust_max: 0.7 # normalized
-    thrust_min: 0.0 # normalized

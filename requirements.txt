@@ -1,8 +1,0 @@
-numba==0.60.0
-loguru==0.7.3
-numpy==2.0.1
-scipy==1.14.1
-PyYAML==6.0.2
-rerun-sdk==0.22.1
-matplotlib==3.9.2
-tqdm==4.67.1

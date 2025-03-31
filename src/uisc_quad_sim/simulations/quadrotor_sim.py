@@ -17,7 +17,7 @@ class QuadSimParams:
     def __init__(self,dt:float,disturb:Disturbance,quad:Quadrotor,g:float,nums:int,mode:int,noise_std:np.ndarray) -> None:
         self.dt = dt
         self.disturb = disturb
-        self.quad = quad
+        self.quad: Quadrotor = quad
         self.g = g
         self.nums = nums
         self.mode = mode

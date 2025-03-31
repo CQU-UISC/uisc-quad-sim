@@ -34,10 +34,9 @@ The **UISC Quadrotor Simulator** is a flexible simulation platform for quadrotor
 ### Installation
 
    ```bash
-   git clone https://github.com/CQU-UISC/uisc-quadsim.git
-   cd uisc-quadsim
-   pip install -r requirements.txt
-   pip install -e .
+   git clone https://github.com/CQU-UISC/uisc-quad-sim.git
+   cd uisc-quad-sim
+   python3 -m pip install -e .
    ```
 
 <!-- USAGE EXAMPLES -->
@@ -45,7 +44,7 @@ The **UISC Quadrotor Simulator** is a flexible simulation platform for quadrotor
 
 Run a simulation with the CTBR controller and visualize with rerun:
 ```bash
-python -m uisc_quad_sim.examples.examplectrl
+python3 -m uisc_quad_sim.examples.examplectrl
 ```
 
 ![Quadrotor Simulation Demo](images/vis.png)

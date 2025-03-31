@@ -89,13 +89,14 @@ def example_ref(t):
 def main():
     dir_path = os.path.dirname(os.path.abspath(__file__))
     quad_params = QuadSimParams.loadFromFile(
-        os.path.join(dir_path, "../configs/ctbr.yaml")
+        os.path.join(dir_path, "../../../configs/ctbr.yaml")
     )
     quad_sim = QuadSim(quad_params)
     quad_vis = DroneVisualizer()
     t_end = 20
     logger.info("Start simulation")
     s_t = time.perf_counter()
+    quad_sim.step(np.zeros(4))
     quad_sim.reset_pos(
         example_ref(0)[:3]
     )

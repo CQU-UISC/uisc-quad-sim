@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "uisc_quad_sim"
+version = "0.0.1"
+dependencies = [
+    "numba>=0.60.0",
+    "loguru>=0.7.3",
+    "numpy>=2.0.1",
+    "scipy>=1.14.1",
+    "PyYAML>=6.0.2",
+    "rerun-sdk>=0.22.1",
+    "matplotlib>=3.9.2",
+    "tqdm>=4.67.1",
+    "gymnasium>=1.1.1"
+]
+requires-python = ">=3.11"
+authors = [
+  {name = "Xu Lu", email = "lux@cqu.edu.cn"},
+]
+maintainers = [
+  {name = "Xu Lu", email = "lux@cqu.edu.cn"},
+]
+description = "uisc lab quadrotor simulator"
+readme = "README.md"
+license = "GPL-3.0"
+license-files = ["LICEN[CS]E*"]
+keywords = ["quadrotor", "simulator"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python"
+]
