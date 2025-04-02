@@ -103,17 +103,18 @@ class VecQuadSim(Sim):
     def __init__(self, sim:QuadSimParams) -> None:
         self.__sim_cfg = sim
         self.__quad = sim.quad
-        self.__rigid_dynamics=QuadrotorDynamics(self.__quad.mass,
+        self.__rigid_dynamics=QuadrotorDynamics(self.__quad._mass,
                                                 self.__sim_cfg.g,
-                                                self.__quad.J,
-                                                self.__quad.J_inv,
-                                                self.__quad.drag_coeff,
+                                                self.__quad._J,
+                                                self.__quad._J_inv,
+                                                self.__quad._drag_coeff,
                                                 self.__sim_cfg.disturb)
-        self.__motor_dynamics=MotorDynamics(self.__quad.tau_inv)
+        self.__motor_dynamics=MotorDynamics(self.__quad._tau_inv)
         super().__init__(self.__sim_cfg.dt)
         logger.info("Control Mode:{}".format(QuadSimParams.control_modes[self.__sim_cfg.mode]))
         #0  1  2  3  4  5  6  7  8  9  10 11 12
         #px py pz vx vy vz qw qx qy qz wx wy wz
+        self.mode = QuadSimParams.control_modes[self.__sim_cfg.mode]
         self.reset()
         
     @property
@@ -155,7 +156,7 @@ class VecQuadSim(Sim):
         w_err = w_d - w # [3,N]
         # J_inv@(ext_moment + tau - np.cross(w.T,np.dot(J,w).T).T)
         # 
-        tau = Kp@w_err+  np.cross(w.T,np.dot(self.__quad.J,w).T).T
+        tau = Kp@w_err+  np.cross(w.T,np.dot(self.__quad._J,w).T).T
         return tau
     
 
@@ -169,7 +170,7 @@ class VecQuadSim(Sim):
         '''
         
         '''Uncomment this block to use close form solution'''
-        motor_thrust = self.__quad.B_inv @ u
+        motor_thrust = self.__quad._B_inv @ u
         cliped_motor_thrust = self.__quad.clipMotorThrust(motor_thrust)
         motor_cmd = self.__quad.thrustMapInv(
             cliped_motor_thrust
@@ -210,7 +211,7 @@ class VecQuadSim(Sim):
         self._motors_omega = self.__quad.clipMotorSpeed(new_omega)#4xN
         thrust = self.__quad.thrustMap(self._motors_omega) #4xN
         logger.debug("motor thrust:{}N".format(thrust.T))
-        thrust_torque = self.__quad.B @ thrust #4xN
+        thrust_torque = self.__quad._B @ thrust #4xN
         return thrust_torque
         
     
@@ -252,11 +253,11 @@ class VecQuadSim(Sim):
         if self.mode==QuadSimParams.CTBR:
             # CTBR
             u[1:4] = self.__angvel_controller(u[1:4])
-            u[0] = self.__quad.clipCollectiveThrust(u[0])*self.__quad.mass #clip thrust=>[N]
+            u[0] = self.__quad.clipCollectiveThrust(u[0])*self.__quad._mass #clip thrust=>[N]
             motor_cmd = self.__motor_commands(u)#4xN omega in [0,1]
         elif self.mode==QuadSimParams.CTBM:
             # CTBM
-            u[0] = self.__quad.clipCollectiveThrust(u[0])*self.__quad.mass #clip thrust=>[N]
+            u[0] = self.__quad.clipCollectiveThrust(u[0])*self.__quad._mass #clip thrust=>[N]
             motor_cmd = self.__motor_commands(u)#4xN omega in [0,1]
         elif self.mode==QuadSimParams.SRT:
             # SRT
@@ -278,12 +279,27 @@ class VecQuadSim(Sim):
         self._x[0:3,:] = p[:,None]
         return
 
-    def reset(self):
+    def set_seed(self, seed:int):
+        return np.random.seed(seed)
+
+    def reset(self,mean:np.ndarray=None,std:np.ndarray=None):
+        '''
+            Reset the simulation
+            Input:
+                rand: if True, reset the state with random values
+                mean: mean of the state 13x1
+                std: standard deviation of the state 13x1
+        '''
         super().reset()
-        self._x = np.zeros((13,self.__sim_cfg.nums))
-        self._motors_omega = np.zeros((4,self.__sim_cfg.nums))
-        self._x[6] = 1
-        self.mode = QuadSimParams.control_modes[self.__sim_cfg.mode]
+        rand = mean is not None and std is not None
+        if rand:
+            self._x = np.random.randn(13,self.__sim_cfg.nums) * std[:,None] + mean[:,None]
+            # norm quaternion
+            self._x[6:10] /= np.linalg.norm(self._x[6:10],axis=0)
+        else:
+            self._x = np.zeros((13,self.__sim_cfg.nums))
+            self._motors_omega = np.zeros((4,self.__sim_cfg.nums))
+            self._x[6] = 1
     
     def estimate(self,gt:bool=False)->np.ndarray:
         '''

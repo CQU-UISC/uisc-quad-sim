@@ -14,7 +14,8 @@ dependencies = [
     "rerun-sdk>=0.22.1",
     "matplotlib>=3.9.2",
     "tqdm>=4.67.1",
-    "gymnasium>=1.1.1"
+    "gymnasium>=1.1.1",
+    "stable_baselines3>=2.6.0"
 ]
 requires-python = ">=3.11"
 authors = [

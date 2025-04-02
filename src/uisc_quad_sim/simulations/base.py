@@ -26,7 +26,10 @@ class Sim(object):
             Step the simulation by one time step
         '''
         self.__t += self.__dt
-        
+    
+    def set_seed(self,seed:int):
+        raise NotImplementedError
+
     def reset(self):
         self.__t = 0
         
