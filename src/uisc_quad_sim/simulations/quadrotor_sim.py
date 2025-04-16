@@ -116,7 +116,7 @@ class VecQuadSim(Sim):
         #px py pz vx vy vz qw qx qy qz wx wy wz
         self.mode = QuadSimParams.control_modes[self.__sim_cfg.mode]
         self.reset()
-        
+
     @property
     def quadrotor(self):
         return self.__quad
@@ -289,6 +289,8 @@ class VecQuadSim(Sim):
                 rand: if True, reset the state with random values
                 mean: mean of the state 13x1
                 std: standard deviation of the state 13x1
+                13 * N
+                4 * N
         '''
         super().reset()
         rand = mean is not None and std is not None

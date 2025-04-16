@@ -108,10 +108,7 @@ def main():
             ctbr = so3_ctrl(x, x_ref)
             quad_vis.log_state(
                 quad_sim.t,
-                x_gt[:3],
-                x_gt[6:10],
-                x_gt[3:6],
-                x_gt[10:13],
+                x_gt,
                 quad_sim.motor_speed,
                 ctbr
             )

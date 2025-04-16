@@ -1,7 +1,7 @@
 #thanks to https://github.com/uzh-rpg
 import numpy as np
 import yaml
-from loguru import logger
+
 
 class Quadrotor:
     '''

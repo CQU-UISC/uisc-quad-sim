@@ -113,6 +113,27 @@ class DroneVisualizer:
         self._drone_path.append(position)
         self._log_path(self._drone_path)
 
+    def log_mpc_traj(self, traj, quad_id=0):
+        """Log 3D traj"""
+        rr.log(
+            f"world/drone/{quad_id}/mpc_traj",
+            rr.LineStrips3D(
+                strips=traj,
+                colors=np.tile([255, 0, 0], (len(traj), 1))
+            )
+        )
+    
+
+    def log_traj_ref(self, traj, quad_id=0):
+        """Log 3D traj"""
+        rr.log(
+            f"world/drone/{quad_id}/traj",
+            rr.LineStrips3D(
+                strips=traj,
+                colors=np.tile([125, 125, 0], (len(traj), 1))
+            )
+        )
+
     def _log_3d_pose(self, position: np.ndarray, quaternion: np.ndarray,quad_id=0):
         """Log 3D pose visualization"""
         rr.log(f"world/drone/{quad_id}/odom",
