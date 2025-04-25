@@ -2,9 +2,9 @@ import os,sys,time
 import numpy as np
 from tqdm import tqdm
 from loguru import logger
-from ..utils.quaternion import q_mult, q_inv, q_rot, mat_q
-from ..simulations import QuadSim,QuadSimParams
-from ..visualize.vis import DroneVisualizer
+from uisc_quad_sim.utils.quaternion import q_mult, q_inv, q_rot, mat_q
+from uisc_quad_sim.simulations import QuadSim,QuadSimParams
+from uisc_quad_sim.visualize.vis import DroneVisualizer
 
 logger.remove()
 logger.add(sys.stdout, level="INFO")

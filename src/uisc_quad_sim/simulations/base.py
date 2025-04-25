@@ -1,11 +1,11 @@
-from ..integration import rk4
+from ..integration import rk4,forward_eulr
 from ..dynamics import Dynamics
 
 class Sim(object):
     def __init__(self,dt:float) -> None:
         self.__dt = dt
         self.__t = 0
-        self.__min_dt = 0.005
+        self.__min_dt = 0.001
         self.__step_size = int(dt//self.__min_dt)
         if self.__step_size < 1:
             self.__step_size = 1
