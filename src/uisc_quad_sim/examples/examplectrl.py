@@ -61,9 +61,9 @@ def so3_ctrl(x, x_d):
     u1 = np.dot(a_d, z)#projection of a_d on z-axis
     return np.concatenate([[u1],w_d])
     # CTBM
-    e_w = w - w_d#angular velocity error
+    # e_w = w - w_d#angular velocity error
     #omega
-    u2 = - (kw * e_w) 
+    # u2 = - (kw * e_w) 
     #torque
     # u2 = -kw * J@e_w + np.cross(w, J @ w)
     return np.concatenate([[u1], u2])
@@ -93,14 +93,14 @@ def main():
     )
     quad_sim = QuadSim(quad_params)
     quad_vis = DroneVisualizer()
-    t_end = 20
+    t_end = 15
     logger.info("Start simulation")
     s_t = time.perf_counter()
     quad_sim.step(np.zeros(4))
     quad_sim.reset_pos(
         example_ref(0)[:3]
     )
-    with tqdm(total=t_end//quad_sim.dt) as pbar:
+    with tqdm(total=t_end//quad_params.dt) as pbar:
         while quad_sim.t < t_end:
             x = quad_sim.estimate()
             x_gt = quad_sim.estimate(gt=True)

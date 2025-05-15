@@ -56,7 +56,6 @@ def quadrotor_dynamics(x:np.ndarray,
     v_dot[0] =  2*(qw*qy+qx*qz)*colective_thrust + ext_force[0]*mass_inv + drag_acc[0]
     v_dot[1] =  2*(qy*qz-qw*qx)*colective_thrust + ext_force[1]*mass_inv + drag_acc[1]
     v_dot[2] = (1-2*(qx**2+qy**2))*colective_thrust - g + ext_force[2]*mass_inv + drag_acc[2]
-
     q_dot = x_dot[6:10]
     q_dot[0] =  0.5*(-wx*qx - wy*qy - wz*qz)
     q_dot[1] =  0.5*(wx*qw + wz*qy - wy*qz)

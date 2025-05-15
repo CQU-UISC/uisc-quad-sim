@@ -50,12 +50,6 @@ class Quadrotor:
         self._tbm = self._arm_length*(0.5)**0.5*np.array([[1,-1,-1,1],[-1,-1,1,1],[0,0,0,0]])
         self._tbm[2,:] = self._kappa*np.array([1,-1,1,-1])
         # Init variables
-        self._min_collective_thrust = None
-        self._max_collective_thrust = None
-        self._B = None
-        self._B = self.allocatioMatrix #allocation matrix B@thrust[4] = u[thrust,torques]
-        # B@[t1,t2,t3,t4] 
-        self._B_inv = np.linalg.pinv(self._B)
         self._drag_coeff = drag_coeff
         arm_l_xy = self._arm_length*(0.5)**0.5
         self._max_torque = np.array([2*arm_l_xy*self._thrust_max,
@@ -148,11 +142,23 @@ class Quadrotor:
             Output:
                 B: allocation matrix \in R^{4,4}
         '''
-        if self._B is not None:
+        if hasattr(self,'_B'):
             return self._B
         self._B = np.ones((4,4))
         self._B[1:4,:] = self._tbm
         return self._B
+
+    @property
+    def allocatioMatrixInv(self):
+        '''
+            Calculate the inverse of the allocation matrix
+            Output:
+                B_inv: inverse of allocation matrix \in R^{4,4}
+        '''
+        if hasattr(self,'_B_inv'):
+            return self._B_inv
+        self._B_inv = np.linalg.pinv(self._B)
+        return self._B_inv
 
     def clipMotorSpeed(self,omega):
         '''
@@ -228,20 +234,21 @@ class Quadrotor:
             Calculate minimum collective thrust
             return: min_collective_thrust \in R
         '''
-        if self._min_collective_thrust is not None:
+        if hasattr(self,'_min_collective_thrust'):
             return self._min_collective_thrust
         self._min_collective_thrust = self._thrust_min*4/self._mass
-    
+        return self._min_collective_thrust
+
     @property
     def maxCollectiveThrust(self):
         '''
             Calculate maximum collective thrust
             return: max_collective_thrust \in R
         '''
-        if self._max_collective_thrust is not None:
+        if hasattr(self,'_max_collective_thrust'):
             return self._max_collective_thrust
         self._max_collective_thrust = self._thrust_max*4/self._mass
-        return self._thrust_max*4/self._mass
+        return self._max_collective_thrust
     
     @property
     def minBodyrates(self):

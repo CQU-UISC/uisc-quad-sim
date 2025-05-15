@@ -5,10 +5,6 @@ class Sim(object):
     def __init__(self,dt:float) -> None:
         self.__dt = dt
         self.__t = 0
-        self.__min_dt = 0.001
-        self.__step_size = int(dt//self.__min_dt)
-        if self.__step_size < 1:
-            self.__step_size = 1
 
     @property
     def dt(self):
@@ -43,10 +39,7 @@ class Sim(object):
             Returns:
                 x:np.ndarray - final state
         '''
-        x = x0
-        for _ in range(self.__step_size): 
-            x = rk4(dynamics,x,u,self.__min_dt)
-        return x
-    
+        return rk4(dynamics,x0,u,self.dt)
+
     def state(self):
         raise NotImplementedError

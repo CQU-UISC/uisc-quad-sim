@@ -184,7 +184,8 @@ class DroneVisualizer:
 
     def _log_orientation(self, quaternion: np.ndarray):
         """Log Euler angle orientation"""
-        euler = Rotation.from_quat(quaternion, scalar_first=True).as_euler('xyz', degrees=True)
+        quaternion = np.array([quaternion[3], quaternion[0], quaternion[1], quaternion[2]])
+        euler = Rotation.from_quat(quaternion).as_euler('xyz', degrees=True)
         components = ["roll", "pitch", "yaw"]
         for i, comp in enumerate(components):
             rr.log(f"state/euler/{comp}", rr.Scalar(euler[i]))

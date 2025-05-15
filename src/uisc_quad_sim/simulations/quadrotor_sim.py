@@ -7,15 +7,24 @@ from .base import Sim
 from ..quadrotor.quadrotor import Quadrotor
 from ..dynamics import QuadrotorDynamics,MotorDynamics,disturbance
 from ..dynamics.disturbance import Disturbance
-
+from ..controller.low_level_simple import LowlevelSimpleController
 class QuadSimParams:
     CTBR = "CTBR"
     CTBM = "CTBM"
     SRT = "SRT"
     control_modes = [CTBR,CTBM,SRT]
     
-    def __init__(self,dt:float,disturb:Disturbance,quad:Quadrotor,g:float,nums:int,mode:int,noise_std:np.ndarray) -> None:
+    def __init__(self,
+                 dt:float,
+                 low_level_dt:float,
+                 disturb:Disturbance,
+                 quad:Quadrotor,
+                 g:float,
+                 nums:int,
+                 mode:int,
+                 noise_std:np.ndarray) -> None:
         self.dt = dt
+        self.low_level_dt = 0.001
         self.disturb = disturb
         self.quad: Quadrotor = quad
         self.g = g
@@ -26,6 +35,7 @@ class QuadSimParams:
     def __str__(self) -> str:
         return f'''Quadrotor Simulator Params:
     dt:{self.dt}
+    low_level_dt:{self.low_level_dt}
     quadrotor:{self.quad}
     g:{self.g}
     nums:{self.nums}
@@ -43,6 +53,7 @@ class QuadSimParams:
         assert 'control_mode' in cfg, "control_mode should be provided"
         assert 'noise_std' in cfg, "noise_std should be provided"
         dt:float = cfg['dt']
+        low_level_dt:float = cfg['low_level_dt'] if 'low_level_dt' in cfg else 0.001
         quad = Quadrotor.loadFromFile(os.path.join(os.path.dirname(file_path),cfg['quadrotor']))
         g:float = cfg['g']
         nums:int = cfg['nums']
@@ -93,37 +104,45 @@ class QuadSimParams:
             assert len(cfg['disturbance']['moment']) == 3, "moment should be 3x1"
             force = np.array(cfg['disturbance']['force'])
             moment = np.array(cfg['disturbance']['moment'])
-            disturb = disturbance.TimeVarField(force,moment,dt)
-        return QuadSimParams(dt,disturb,quad,g,nums,mode,noise_std)
+            disturb = disturbance.TimeVarField(force,moment,low_level_dt)
+        return QuadSimParams(dt,low_level_dt,disturb,quad,g,nums,mode,noise_std)
 
 '''
 Quadrotor simulator
 '''
 class VecQuadSim(Sim):
     def __init__(self, sim:QuadSimParams) -> None:
-        self.__sim_cfg = sim
-        self.__quad = sim.quad
-        self.__rigid_dynamics=QuadrotorDynamics(self.__quad._mass,
-                                                self.__sim_cfg.g,
-                                                self.__quad._J,
-                                                self.__quad._J_inv,
-                                                self.__quad._drag_coeff,
-                                                self.__sim_cfg.disturb)
-        self.__motor_dynamics=MotorDynamics(self.__quad._tau_inv)
-        super().__init__(self.__sim_cfg.dt)
-        logger.info("Control Mode:{}".format(QuadSimParams.control_modes[self.__sim_cfg.mode]))
+        self._low_level_dt = 0.001 #angle velocity control run at 1000Hz
+        self._sim_cfg = sim
+        self._quad = sim.quad
+        self._low_level_steps = np.ceil(self._sim_cfg.dt/self._low_level_dt).astype(int)
+        assert np.isclose(self._low_level_steps*self._low_level_dt,self._sim_cfg.dt), "low level dt should be multiple of high level dt"
+        self._rigid_dynamics=QuadrotorDynamics(self._quad._mass,
+                                                self._sim_cfg.g,
+                                                self._quad._J,
+                                                self._quad._J_inv,
+                                                self._quad._drag_coeff,
+                                                self._sim_cfg.disturb)
+        self._low_level_ctrl = LowlevelSimpleController(self._low_level_dt,self._quad._J)
+        self._motor_dynamics=MotorDynamics(self._quad._tau_inv)
+        super().__init__(self._low_level_dt)
+        logger.info("Control Mode:{}".format(QuadSimParams.control_modes[self._sim_cfg.mode]))
         #0  1  2  3  4  5  6  7  8  9  10 11 12
         #px py pz vx vy vz qw qx qy qz wx wy wz
-        self.mode = QuadSimParams.control_modes[self.__sim_cfg.mode]
+        self.mode = QuadSimParams.control_modes[self._sim_cfg.mode]
         self.reset()
 
     @property
+    def sim_dt(self):
+        return self._sim_cfg.dt
+
+    @property
     def quadrotor(self):
-        return self.__quad
+        return self._quad
     
     @property
     def disturbance(self):
-        return self.__rigid_dynamics.disturb
+        return self._rigid_dynamics.disturb
     
     @property
     def motor_speed(self):
@@ -133,34 +152,8 @@ class VecQuadSim(Sim):
     def state(self):
         return self._x
     
-    def __angvel_controller(self,omega_des:np.ndarray)->np.ndarray:
-        '''
-            Calculate moment from control inputs
-            Input:
-                u: control inputs [bodyrates] unit: [rad/s] shape:[3,N]
-            Output:
-                moment: moment [3,N] unit: [Nm] shape:[3,N]
-                
-            # Control law:
-            w_dot = J_inv @ (tau - w x J @ w)\\
-            if we want w_err have asymptotic stability=>\\
-            w_err = w_d - w\\
-            v(t) = 0.5*w_err.T@w_err\\
-            v_dot(t) = w_err.T @ dot_w_err = w_err @ (-dot_w) = -w_err @  J_inv @ (tau - w x J @ w)\\
-            if let tau = Kp * w_err +  w x J @ w\\
-            v_dot = -w_err @  J_inv @ (Kp * w_err) <= 0
-        '''
-        Kp = np.diag([1,1,1]) 
-        w = self._x[10:13]
-        w_d = omega_des
-        w_err = w_d - w # [3,N]
-        # J_inv@(ext_moment + tau - np.cross(w.T,np.dot(J,w).T).T)
-        # 
-        tau = Kp@w_err+  np.cross(w.T,np.dot(self.__quad._J,w).T).T
-        return tau
-    
 
-    def __motor_commands(self,u:np.ndarray)->np.ndarray:
+    def _motor_commands(self,u:np.ndarray)->np.ndarray:
         '''
             Calculate motor commands from control inputs
             Input:
@@ -170,9 +163,9 @@ class VecQuadSim(Sim):
         '''
         
         '''Uncomment this block to use close form solution'''
-        motor_thrust = self.__quad._B_inv @ u
-        cliped_motor_thrust = self.__quad.clipMotorThrust(motor_thrust)
-        motor_cmd = self.__quad.thrustMapInv(
+        motor_thrust = self._quad.allocatioMatrixInv @ u
+        cliped_motor_thrust = self._quad.clipMotorThrust(motor_thrust)
+        motor_cmd = self._quad.thrustMapInv(
             cliped_motor_thrust
         )
 
@@ -193,7 +186,7 @@ class VecQuadSim(Sim):
         logger.debug("compute motor commands, thrust_torque:{}N, motor thrust:{}N, motor commands:{}".format(u.T,motor_thrust.T,motor_cmd.T))
         return motor_cmd 
     
-    def __step_motor(self,motor_cmd:np.ndarray)->np.ndarray:
+    def _step_motor(self,motor_cmd:np.ndarray)->np.ndarray:
         '''
             Step the simulation by one time step
             Input:
@@ -202,26 +195,26 @@ class VecQuadSim(Sim):
                 thrust_torque: [thrust,torques] unit: [N,Nm] shape:[4,N]
         '''
         new_omega = self._run(
-            self.__motor_dynamics.dxdt,
+            self._motor_dynamics.dxdt,
             self._motors_omega,
             motor_cmd,
         )
 
         logger.debug("motor omega:{}, new motor omega:{}".format(self._motors_omega.T,new_omega.T))
-        self._motors_omega = self.__quad.clipMotorSpeed(new_omega)#4xN
-        thrust = self.__quad.thrustMap(self._motors_omega) #4xN
+        self._motors_omega = self._quad.clipMotorSpeed(new_omega)#4xN
+        thrust = self._quad.thrustMap(self._motors_omega) #4xN
         logger.debug("motor thrust:{}N".format(thrust.T))
-        thrust_torque = self.__quad._B @ thrust #4xN
+        thrust_torque = self._quad._B @ thrust #4xN
         return thrust_torque
         
     
-    def __step_rigid(self,u:np.ndarray)->np.ndarray:
+    def _step_rigid(self,u:np.ndarray)->np.ndarray:
         '''
             Step the simulation by one time step
             u: control inputs [bodyrates] unit: [rad/s] shape:[3,N]
         '''
         self._x = self._run(
-            self.__rigid_dynamics.dxdt,
+            self._rigid_dynamics.dxdt,
             self._x,
             u,
         )
@@ -229,9 +222,28 @@ class VecQuadSim(Sim):
     
 
     def step(self,u):
-        return self.__step(u)
+        for _ in range(self._low_level_steps):
+            # step the simulation by one time step
+            # u: control inputs [thrust,torques] unit: [m/s^2,Nm] shape:[4,N]
+            # or
+            # u: control inputs [thrust,bodyrates] unit: [m/s^2,rad/s] shape:[4,N]
+            # u = u[:,None]
+            self._x = self._step(u)
+        return self._x
     
-    def __step(self,u)->np.ndarray:
+    def _log(self,state,control_setpoint):
+        '''
+            Log the simulation
+        '''
+        if not hasattr(self,'_state_log'):
+            self._state_log = []
+        if not hasattr(self,'_setpoint_log'):
+            self._setpoint_log = []
+        self._state_log.append(state)
+        self._setpoint_log.append(control_setpoint)
+        return
+
+    def _step(self,u)->np.ndarray:
         '''
             Step the simulation by one time step using control inputs
             Input:
@@ -249,27 +261,31 @@ class VecQuadSim(Sim):
             - Step the rigid body dynamics by one time step, get new state. 13xN
         '''
         super()._step_t()
+        u_sp = u
         logger.debug("control inputs:{}".format(u.T))
         if self.mode==QuadSimParams.CTBR:
             # CTBR
-            u[1:4] = self.__angvel_controller(u[1:4])
-            u[0] = self.__quad.clipCollectiveThrust(u[0])*self.__quad._mass #clip thrust=>[N]
-            motor_cmd = self.__motor_commands(u)#4xN omega in [0,1]
+            tbm = np.zeros((4,self._sim_cfg.nums))
+            tbm[1:4] = self._low_level_ctrl.compute_control(self._x, u_sp[1:4])
+            tbm[0] = self._quad.clipCollectiveThrust(u[0])*self._quad._mass #clip thrust=>[N]
+            motor_cmd = self._motor_commands(tbm)#4xN omega in [0,1]
         elif self.mode==QuadSimParams.CTBM:
             # CTBM
-            u[0] = self.__quad.clipCollectiveThrust(u[0])*self.__quad._mass #clip thrust=>[N]
-            motor_cmd = self.__motor_commands(u)#4xN omega in [0,1]
+            tbm = np.zeros((4,self._sim_cfg.nums))
+            tbm[1:4] = u[1:4]#body torque
+            tbm[0] = self._quad.clipCollectiveThrust(u[0])*self._quad._mass #clip thrust=>[N]
+            motor_cmd = self._motor_commands(tbm)#4xN omega in [0,1]
         elif self.mode==QuadSimParams.SRT:
             # SRT
-            cliped_motor_thrust = self.__quad.clipMotorThrust(u)
-            motor_cmd = self.__quad.thrustMapInv(cliped_motor_thrust)
-        
+            cliped_motor_thrust = self._quad.clipMotorThrust(u)
+            motor_cmd = self._quad.thrustMapInv(cliped_motor_thrust)
         # step dynamics
-        thrust_torque = self.__step_motor(motor_cmd)#4xN, [thrust(m/s^2),torques]
-        self._x = self.__step_rigid(thrust_torque)
+        thrust_torque = self._step_motor(motor_cmd=motor_cmd)#4xN, [thrust(m/s^2),torques]
+        self._x = self._step_rigid(thrust_torque)
         self._x[6:10,:] /= np.linalg.norm(self._x[6:10,:]) #norm quaternion
+        self._log(self._x,u_sp)
         return self._x
-
+   
     def reset_pos(self,p:np.ndarray):
         '''
             Reset the position of the quadrotor
@@ -295,12 +311,12 @@ class VecQuadSim(Sim):
         super().reset()
         rand = mean is not None and std is not None
         if rand:
-            self._x = np.random.randn(13,self.__sim_cfg.nums) * std[:,None] + mean[:,None]
+            self._x = np.random.randn(13,self._sim_cfg.nums) * std[:,None] + mean[:,None]
             # norm quaternion
             self._x[6:10] /= np.linalg.norm(self._x[6:10],axis=0)
         else:
-            self._x = np.zeros((13,self.__sim_cfg.nums))
-            self._motors_omega = np.zeros((4,self.__sim_cfg.nums))
+            self._x = np.zeros((13,self._sim_cfg.nums))
+            self._motors_omega = np.zeros((4,self._sim_cfg.nums))
             self._x[6] = 1
     
     def estimate(self,gt:bool=False)->np.ndarray:
@@ -308,12 +324,12 @@ class VecQuadSim(Sim):
             Return Unbiased estimate of the state
         '''
         state = self._x
-        # motor_thrust = self.__quad.thrustMap(self._motors_omega)
+        # motor_thrust = self._quad.thrustMap(self._motors_omega)
         # state = np.concatenate((self._x,motor_thrust),axis=0)
         if gt:
             return state
         noise = np.zeros_like(state)
-        noise[:13,:] = np.random.randn(13,1) * self.__sim_cfg.noise_std[:,None]
+        noise[:13,:] = np.random.randn(13,1) * self._sim_cfg.noise_std[:,None]
         est = state + noise
         return est
     
