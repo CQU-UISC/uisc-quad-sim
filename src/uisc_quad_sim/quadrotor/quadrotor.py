@@ -157,7 +157,7 @@ class Quadrotor:
         '''
         if hasattr(self,'_B_inv'):
             return self._B_inv
-        self._B_inv = np.linalg.pinv(self._B)
+        self._B_inv = np.linalg.pinv(self.allocatioMatrix)
         return self._B_inv
 
     def clipMotorSpeed(self,omega):
