@@ -49,7 +49,6 @@ def quadrotor_dynamics(x:np.ndarray,
     wz = w[2]
 
     drag_acc = -drag_coeff[:,None] * v * mass_inv
-    
     # print("ExtForce:",ext_force)
     x_dot[0:3] = v
     v_dot = x_dot[3:6]
