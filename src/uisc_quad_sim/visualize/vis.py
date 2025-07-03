@@ -1,3 +1,4 @@
+from typing import Callable
 import rerun as rr
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -132,6 +133,11 @@ class DroneVisualizer:
                 strips=traj,
                 colors=np.tile([125, 125, 0], (len(traj), 1))
             )
+        )
+
+    def log_custom_msg(self,custom_callback:Callable):
+        custom_callback(
+            rr
         )
 
     def _log_3d_pose(self, position: np.ndarray, quaternion: np.ndarray,quad_id=0):

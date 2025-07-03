@@ -34,7 +34,7 @@ def example_ref(t):
 
 def main():
     dir_path = os.path.dirname(os.path.abspath(__file__))
-    quad_params = QuadSimParams.loadFromFile(
+    quad_params = QuadSimParams.load(
         os.path.join(dir_path, "../../../configs/ctbr.yaml")
     )
     quad_sim = QuadSim(quad_params)

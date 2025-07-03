@@ -170,3 +170,39 @@ class WindField(Disturbance):
     decay_lat:{self.decay_lat}
     decay_long:{self.decay_long}
     coneslope:{self.coneslope}'''
+
+
+class CompositeFiled(Disturbance):
+    name = 'D_COMPOSITE'
+    def __init__(self, *disturbances: Disturbance):
+        self.disturbances = []
+        for d in disturbances:
+            if not isinstance(d, Disturbance):
+                raise TypeError(f'Expected Disturbance, got {type(d)}')
+            self.disturbances.append(d)
+
+    def add(self, disturbance: Disturbance):
+        if not isinstance(disturbance, Disturbance):
+            raise TypeError(f'Expected Disturbance, got {type(disturbance)}')
+        self.disturbances.append(disturbance)
+    
+    def clear(self):
+        self.disturbances = []
+
+    def __len__(self):
+        return len(self.disturbances)
+
+    def force(self, x, u):
+        f = np.zeros((3, x.shape[1]))
+        for d in self.disturbances:
+            f += d.force(x, u)
+        return f
+
+    def moment(self, x, u):
+        m = np.zeros((3, x.shape[1]))
+        for d in self.disturbances:
+            m += d.moment(x, u)
+        return m
+    
+    def __str__(self):
+        return 'Composite Disturbance: ' + ', '.join([str(d) for d in self.disturbances])

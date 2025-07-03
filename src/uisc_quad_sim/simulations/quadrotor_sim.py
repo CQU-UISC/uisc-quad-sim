@@ -16,26 +16,22 @@ class QuadSimParams:
     
     def __init__(self,
                  dt:float,
-                 low_level_dt:float,
-                 disturb:Disturbance,
                  quad:Quadrotor,
                  g:float,
                  nums:int,
                  mode:int,
                  noise_std:np.ndarray) -> None:
         self.dt = dt
-        self.low_level_dt = 0.001
-        self.disturb = disturb
         self.quad: Quadrotor = quad
         self.g = g
         self.nums = nums
         self.mode = mode
         self.noise_std =  noise_std
-    
+        self.disturb = disturbance.EmptyField()
+
     def __str__(self) -> str:
         return f'''Quadrotor Simulator Params:
     dt:{self.dt}
-    low_level_dt:{self.low_level_dt}
     quadrotor:{self.quad}
     g:{self.g}
     nums:{self.nums}
@@ -44,7 +40,7 @@ class QuadSimParams:
     disturbance:{self.disturb}'''
 
     @staticmethod
-    def loadFromFile(file_path):
+    def load(file_path):
         cfg = yaml.load(open(file_path,'r'),Loader=yaml.FullLoader)
         assert 'dt' in cfg, "dt should be provided"
         assert 'quadrotor' in cfg, "quadrotor config should be provided"
@@ -71,48 +67,14 @@ class QuadSimParams:
         else:
             raise ValueError("control_mode should be one of {}".format(QuadSimParams.control_modes))
         
-        # Now hard code the disturbance
-        disturb = disturbance.EmptyField()
-        if cfg['disturbance']['type'] == 'const':
-            assert 'force' in cfg['disturbance'], "force should be provided"
-            assert 'moment' in cfg['disturbance'], "moment should be provided"
-            # size of force and moment should be 3
-            assert len(cfg['disturbance']['force']) == 3, "force should be 3x1"
-            assert len(cfg['disturbance']['moment']) == 3, "moment should be 3x1"
-            force = np.array(cfg['disturbance']['force'])
-            moment = np.array(cfg['disturbance']['moment'])
-            disturb = disturbance.ConstField(force,moment)
-        elif cfg['disturbance']['type'] == 'empty':
-            disturb = disturbance.EmptyField()
-        elif cfg['disturbance']['type'] == 'wind':
-            assert 'pos' in cfg['disturbance'], "pos should be provided"
-            assert 'to' in cfg['disturbance'], "to should be provided"
-            assert 'vmax' in cfg['disturbance'], "vmax should be provided"
-            assert 'radius' in cfg['disturbance'], "radius should be provided"
-            assert 'noisevar' in cfg['disturbance'], "noisevar should be provided"
-            # pos and to should be 3x1
-            assert len(cfg['disturbance']['pos']) == 3, "pos should be 3x1"
-            assert len(cfg['disturbance']['to']) == 3, "to should be 3x1"
-            pos = np.array(cfg['disturbance']['pos'])
-            to = np.array(cfg['disturbance']['to'])
-            disturb = disturbance.WindField(pos,to,cfg['disturbance']['vmax'],cfg['disturbance']['radius'],cfg['disturbance']['noisevar'])
-        elif cfg['disturbance']['type'] == 'timevar':
-            assert 'force' in cfg['disturbance'], "force should be provided"
-            assert 'moment' in cfg['disturbance'], "moment should be provided"
-            # size of force and moment should be 3
-            assert len(cfg['disturbance']['force']) == 3, "force should be 3x1"
-            assert len(cfg['disturbance']['moment']) == 3, "moment should be 3x1"
-            force = np.array(cfg['disturbance']['force'])
-            moment = np.array(cfg['disturbance']['moment'])
-            disturb = disturbance.TimeVarField(force,moment,low_level_dt)
-        return QuadSimParams(dt,low_level_dt,disturb,quad,g,nums,mode,noise_std)
+        return QuadSimParams(dt,quad,g,nums,mode,noise_std)
 
 '''
 Quadrotor simulator
 '''
 class VecQuadSim(Sim):
     def __init__(self, sim:QuadSimParams) -> None:
-        self._low_level_dt = 0.001 #angle velocity control run at 1000Hz
+        self._low_level_dt = 0.001 #angle velocity control run at 1000Hz current not use config
         self._sim_cfg = sim
         self._quad = sim.quad
         self._low_level_steps = np.ceil(self._sim_cfg.dt/self._low_level_dt).astype(int)
@@ -144,6 +106,15 @@ class VecQuadSim(Sim):
     def disturbance(self):
         return self._rigid_dynamics.disturb
     
+    def set_disturbance(self,disturb:Disturbance):
+        '''
+            Set disturbance for the simulation
+            Input:
+                disturb: disturbance object
+        '''
+        self._rigid_dynamics.disturb = disturb
+        logger.info("Set disturbance:{}".format(disturb))
+
     @property
     def motor_speed(self):
         return self._motors_omega
