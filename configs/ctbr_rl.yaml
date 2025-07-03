@@ -1,8 +1,8 @@
-nums: 1
+nums: 5
 g: 9.81
 quadrotor: "xi35.yaml"
 dt: 0.01
-control_mode: "CTBR" # "CTBR" or "CTBM" or "SRT"
+control_mode: "CTBR" # "CTBR" or "CTBM" or "SRT" 
 noise_std:  [0.01,0.01,0.01, #pos
               0.01,0.01,0.01, #vel
               0.001,0.001,0.001,0.001, #quaternion

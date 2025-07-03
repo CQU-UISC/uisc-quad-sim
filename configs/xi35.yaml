@@ -12,7 +12,7 @@ motors:
     estimate_thrust: false # If true, the thrust is estimated from the z-axis acceleration and thrust
     thrust_map: [0.000001, 5.0, 0.0] # [N/1^2, N/1, N] (thrust = thrust_map[0]*cmd^2 + thrust_map[1]*cmd + thrust_map[2])
     thrust_min: 0.0 # N
-    thrust_max: 7 # N (each motor)
+    thrust_max: 5 # N (each motor)
 
 # TODO: add the following parameters
 # Limis for the angular velocity of the drone

@@ -29,7 +29,7 @@ The **UISC Quadrotor Simulator** is a flexible simulation platform for quadrotor
 ## Getting Started
 
 ### Prerequisites
-- Python ≥ 3.10 (optional, for future Gym wrapper)
+- Python ≥ 3.10
 
 ### Installation
 

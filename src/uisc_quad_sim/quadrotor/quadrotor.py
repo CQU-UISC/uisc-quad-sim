@@ -1,7 +1,7 @@
 #thanks to https://github.com/uzh-rpg
 import numpy as np
 import yaml
-from loguru import logger
+
 
 class Quadrotor:
     '''
@@ -32,47 +32,42 @@ class Quadrotor:
         assert len(drag_coeff) == 3, "drag_coeff should be 3x1"
         assert len(omega_min) == 3, "omega_min should be 3x1"
         assert len(omega_max) == 3, "omega_max should be 3x1"
-        self.name = name
-        self.mass = mass
-        self.J = np.diag(inertia)
-        self.J_inv = np.linalg.inv(self.J)
-        self.arm_length = arm_length
-        self.kappa = kappa
-        self.motor_min = motor_min
-        self.motor_max = motor_max
-        self.tau = motor_time_constant
-        self.tau_inv = 1/motor_time_constant
-        self.thrust_map = thrust_map
-        self.thrust_max = thrust_max
-        self.thrust_min = thrust_min
-        self.omega_min = omega_min
-        self.omega_max = omega_max
-        self.tbm = self.arm_length*(0.5)**0.5*np.array([[1,-1,-1,1],[-1,-1,1,1],[0,0,0,0]])
-        self.tbm[2,:] = self.kappa*np.array([1,-1,1,-1])
+        self._name = name
+        self._mass = mass
+        self._J = np.diag(inertia)
+        self._J_inv = np.linalg.inv(self._J)
+        self._arm_length: float = arm_length
+        self._kappa = kappa
+        self._motor_min = motor_min
+        self._motor_max = motor_max
+        self._tau = motor_time_constant
+        self._tau_inv = 1/motor_time_constant
+        self._thrust_map = thrust_map
+        self._thrust_max = thrust_max
+        self._thrust_min = thrust_min
+        self._bodyrates_omega_min = omega_min
+        self._bodyrates_omega_max = omega_max
+        self._tbm = self._arm_length*(0.5)**0.5*np.array([[1,-1,-1,1],[-1,-1,1,1],[0,0,0,0]])
+        self._tbm[2,:] = self._kappa*np.array([1,-1,1,-1])
         # Init variables
-        self._min_collective_thrust = None
-        self._max_collective_thrust = None
-        self.B = None
-        self.B = self.allocatioMatrix() #allocation matrix B@thrust[4] = u[thrust,torques]
-        # B@[t1,t2,t3,t4] 
-        self.B_inv = np.linalg.pinv(self.B)
-        self.drag_coeff = drag_coeff
-        arm_l_xy = self.arm_length*(0.5)**0.5
-        self.max_torque = np.array([2*arm_l_xy*self.thrust_max,
-                                    2*arm_l_xy*self.thrust_max,
-                                    2*self.kappa*self.thrust_max])
-        self.min_torque = -self.max_torque
+        self._drag_coeff = drag_coeff
+        arm_l_xy = self._arm_length*(0.5)**0.5
+        self._max_torque = np.array([2*arm_l_xy*self._thrust_max,
+                                    2*arm_l_xy*self._thrust_max,
+                                    2*self._kappa*self._thrust_max])
+        self._min_torque = -self._max_torque
+
     def __str__(self):
-        return f'''Quadrotor {self.name}
-    Mass: {self.mass} kg
-    Inertia: {np.diag(self.J)}
-    Arm Length: {self.arm_length} m
-    Kappa: {self.kappa} Nm/N
-    Drag Coefficient: {self.drag_coeff} N/(m/s)
-    Motor Speed Range: [{self.motor_min},{self.motor_max}]
-    Motor Time Constant: {self.tau} s
-    Thrust Map: {self.thrust_map}
-    Thrust Range: [{self.thrust_min},{self.thrust_max}]'''
+        return f'''Quadrotor {self._name}
+    Mass: {self._mass} kg
+    Inertia: {np.diag(self._J)}
+    Arm Length: {self._arm_length} m
+    Kappa: {self._kappa} Nm/N
+    Drag Coefficient: {self._drag_coeff} N/(m/s)
+    Motor Speed Range: [{self._motor_min},{self._motor_max}]
+    Motor Time Constant: {self._tau} s
+    Thrust Map: {self._thrust_map}
+    Thrust Range: [{self._thrust_min},{self._thrust_max}]'''
     
     @staticmethod
     def loadFromFile(file_path):
@@ -124,13 +119,54 @@ class Quadrotor:
                         omega_min,
                         omega_max)
     
+    @property
+    def mass(self):
+        return self._mass
+    
+    @property
+    def inertia(self):
+        return self._J
+    
+    @property
+    def arm_length(self):
+        return self._arm_length
+    
+    @property
+    def inertia_inv(self):
+        return self._J_inv
+    
+    @property
+    def allocatioMatrix(self):
+        '''
+            Calculate the allocation matrix
+            Output:
+                B: allocation matrix \in R^{4,4}
+        '''
+        if hasattr(self,'_B'):
+            return self._B
+        self._B = np.ones((4,4))
+        self._B[1:4,:] = self._tbm
+        return self._B
+
+    @property
+    def allocatioMatrixInv(self):
+        '''
+            Calculate the inverse of the allocation matrix
+            Output:
+                B_inv: inverse of allocation matrix \in R^{4,4}
+        '''
+        if hasattr(self,'_B_inv'):
+            return self._B_inv
+        self._B_inv = np.linalg.pinv(self.allocatioMatrix)
+        return self._B_inv
+
     def clipMotorSpeed(self,omega):
         '''
             Clip motor speed to the range [motor_min,motor_max]
             Input:
                 omega: motor speed \in R has shape (4,N)
         '''
-        return np.clip(omega,self.motor_min,self.motor_max)
+        return np.clip(omega,self._motor_min,self._motor_max)
         
     def thrustMap(self,omega):
         '''
@@ -143,7 +179,7 @@ class Quadrotor:
         # element wise multiply
         omega2 = omega**2
         thrust = np.zeros_like(omega)
-        thrust[:] = self.thrust_map[0]*omega2 + self.thrust_map[1]*omega + self.thrust_map[2]
+        thrust[:] = self._thrust_map[0]*omega2 + self._thrust_map[1]*omega + self._thrust_map[2]
         return thrust
     
     def thrustMapInv(self,thrust):
@@ -159,25 +195,14 @@ class Quadrotor:
         # c2*omega^2 + c1*omega + c0 - thrust = 0
         # a = c2, b = c1, c = c0 - thrust
         # ==> x = (-b + (b^2 - 4ac)^0.5)/(2a)
-        c2 = self.thrust_map[0] 
-        c1 = self.thrust_map[1]
-        c0 = self.thrust_map[2]
+        c2 = self._thrust_map[0] 
+        c1 = self._thrust_map[1]
+        c0 = self._thrust_map[2]
         scale = 1/(2*c2)
         offset = -c1*scale
         root = np.sqrt(c1**2 - 4*c2*(c0 - thrust))
         return offset + root*scale
-    
-    def allocatioMatrix(self):
-        '''
-            Calculate the allocation matrix
-            Output:
-                B: allocation matrix \in R^{4,4}
-        '''
-        if self.B is not None:
-            return self.B
-        self.B = np.ones((4,4))
-        self.B[1:4,:] = self.tbm
-        return self.B
+
 
     def clipThrust(self,thrust):
         '''
@@ -185,32 +210,86 @@ class Quadrotor:
             Input:
                 thrust: thrust \in R (unit:N) has shape (4,N)
         '''
-        return np.clip(thrust,self.thrust_min,self.thrust_max)
+        return np.clip(thrust,self._thrust_min,self._thrust_max)
     
+    @property
+    def minThrust(self):
+        '''
+            minimum thrust
+            return: min_thrust \in R
+        '''
+        return self._thrust_min
+    
+    @property
+    def maxThrust(self):
+        '''
+            maximum thrust
+            return: max_thrust \in R
+        '''
+        return self._thrust_max
+
+    @property
     def minCollectiveThrust(self):
         '''
             Calculate minimum collective thrust
+            return: min_collective_thrust \in R
         '''
-        if self._min_collective_thrust is not None:
+        if hasattr(self,'_min_collective_thrust'):
             return self._min_collective_thrust
-        self._min_collective_thrust = self.thrust_min*4/self.mass
-    
+        self._min_collective_thrust = self._thrust_min*4/self._mass
+        return self._min_collective_thrust
+
+    @property
     def maxCollectiveThrust(self):
         '''
             Calculate maximum collective thrust
+            return: max_collective_thrust \in R
         '''
-        if self._max_collective_thrust is not None:
+        if hasattr(self,'_max_collective_thrust'):
             return self._max_collective_thrust
-        self._max_collective_thrust = self.thrust_max*4/self.mass
-        return self.thrust_max*4/self.mass
+        self._max_collective_thrust = self._thrust_max*4/self._mass
+        return self._max_collective_thrust
     
+    @property
+    def minBodyrates(self):
+        '''
+            minimum body rates
+            return: omega_min \in R^3
+        '''
+        return self._bodyrates_omega_min
+    
+    @property
+    def maxBodyrates(self):
+        '''
+            maximum body rates
+            return: omega_max \in R^3
+        '''
+        return self._bodyrates_omega_max
+
+    @property
+    def minTorques(self):
+        '''
+            minimum torques
+            return: min_torque \in R^3
+        '''
+        return self._min_torque
+    
+    @property
+    def maxTorques(self):
+        '''
+            maximum torques
+            return: max_torque \in R^3
+        '''
+        return self._max_torque
+    
+
     def clipCollectiveThrust(self,thrust):
         '''
             Clip collective thrust to the range [minCollectiveThrust,maxCollectiveThrust]
             Input:
                 thrust: thrust \in R (unit:N) has shape (1,N)
         '''
-        return np.clip(thrust,self.minCollectiveThrust(),self.maxCollectiveThrust())
+        return np.clip(thrust,self.minCollectiveThrust,self.maxCollectiveThrust)
     
     def clipMotorThrust(self,thrust):
         '''
@@ -218,4 +297,4 @@ class Quadrotor:
             Input:
                 thrust: thrust \in R (unit:N) has shape (4,N)
         '''
-        return np.clip(thrust,self.thrust_min,self.thrust_max)
+        return np.clip(thrust,self._thrust_min,self._thrust_max)
