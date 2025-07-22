@@ -54,7 +54,7 @@ class QuadSimParams:
         g:float = cfg['g']
         nums:int = cfg['nums']
         noise_std = np.array(cfg['noise_std'])
-        assert noise_std.shape[0] == 13, "noise_std should be 13x1"
+        assert noise_std.shape[0] == 13+4, "noise_std should be 17x1"
         
         # control mode: bodyrates or torques
         mode = 0
@@ -106,14 +106,21 @@ class VecQuadSim(Sim):
     def disturbance(self):
         return self._rigid_dynamics.disturb
     
-    def set_disturbance(self,disturb:Disturbance):
+    def add_disturbance(self,disturb:Disturbance):
         '''
-            Set disturbance for the simulation
+            Add disturbance for the simulation
             Input:
                 disturb: disturbance object
         '''
-        self._rigid_dynamics.disturb = disturb
-        logger.info("Set disturbance:{}".format(disturb))
+        self._rigid_dynamics.add_disturbance(disturb)
+        logger.info("Add disturbance:{}".format(disturb))
+
+    def reset_disturbance(self):
+        '''
+            Reset the disturbance to an empty field.
+        '''
+        self._rigid_dynamics.reset_disturbance()
+        logger.info("Reset disturbance to empty field")
 
     @property
     def motor_speed(self):
@@ -232,7 +239,7 @@ class VecQuadSim(Sim):
             - Step the rigid body dynamics by one time step, get new state. 13xN
         '''
         super()._step_t()
-        u_sp = u
+        u_sp = u + np.random.randn(4,1) * self._sim_cfg.noise_std[13:13+4,None]
         logger.debug("control inputs:{}".format(u.T))
         if self.mode==QuadSimParams.CTBR:
             # CTBR
@@ -300,7 +307,7 @@ class VecQuadSim(Sim):
         if gt:
             return state
         noise = np.zeros_like(state)
-        noise[:13,:] = np.random.randn(13,1) * self._sim_cfg.noise_std[:,None]
+        noise[:13,:] = np.random.randn(13,1) * self._sim_cfg.noise_std[:13,None]
         est = state + noise
         return est
     
