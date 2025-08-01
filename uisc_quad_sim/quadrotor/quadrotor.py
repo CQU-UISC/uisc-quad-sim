@@ -70,7 +70,7 @@ class Quadrotor:
     Thrust Range: [{self._thrust_min},{self._thrust_max}]'''
     
     @staticmethod
-    def loadFromFile(file_path):
+    def load(file_path):
         '''
             Load quadrotor parameters from file
         '''

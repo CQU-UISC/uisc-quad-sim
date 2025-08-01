@@ -1,3 +1,4 @@
+from typing import Callable
 import rerun as rr
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -134,6 +135,11 @@ class DroneVisualizer:
             )
         )
 
+    def log_custom_msg(self,custom_callback:Callable):
+        custom_callback(
+            rr
+        )
+
     def _log_3d_pose(self, position: np.ndarray, quaternion: np.ndarray,quad_id=0):
         """Log 3D pose visualization"""
         rr.log(f"world/drone/{quad_id}/odom",
@@ -184,8 +190,8 @@ class DroneVisualizer:
 
     def _log_orientation(self, quaternion: np.ndarray):
         """Log Euler angle orientation"""
-        quaternion = np.array([quaternion[3], quaternion[0], quaternion[1], quaternion[2]])
-        euler = Rotation.from_quat(quaternion).as_euler('xyz', degrees=True)
+        quaternion = np.array([quaternion[1], quaternion[2], quaternion[3], quaternion[0]])
+        euler = Rotation.from_quat(quaternion).as_euler('xyz')
         components = ["roll", "pitch", "yaw"]
         for i, comp in enumerate(components):
             rr.log(f"state/euler/{comp}", rr.Scalar(euler[i]))

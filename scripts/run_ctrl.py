@@ -34,8 +34,8 @@ def example_ref(t):
 
 def main():
     dir_path = os.path.dirname(os.path.abspath(__file__))
-    quad_params = QuadSimParams.loadFromFile(
-        os.path.join(dir_path, "../../../configs/ctbr.yaml")
+    quad_params = QuadSimParams.load(
+        os.path.join(dir_path, "../configs/ctbr.yaml")
     )
     quad_sim = QuadSim(quad_params)
     quad_vis = DroneVisualizer()
@@ -46,13 +46,13 @@ def main():
     quad_sim.reset_pos(
         example_ref(0)[:3]
     )
-    ctrl = SE3Controller(quad_params.dt, SE3Controller.M_V)
+    ctrl = SE3Controller(SE3Controller.M_PV)
     with tqdm(total=t_end//quad_params.dt) as pbar:
         while quad_sim.t < t_end:
             x = quad_sim.estimate()
             x_gt = quad_sim.estimate(gt=True)
             x_ref = example_ref(quad_sim.t)
-            ctbr = ctrl.compute_control(x, x_ref)
+            ctbr = ctrl.compute_control(x, x_ref) 
             quad_vis.log_state(
                 quad_sim.t,
                 x_gt,

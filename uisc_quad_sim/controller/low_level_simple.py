@@ -2,8 +2,8 @@ from .base import BaseController
 import numpy as np
 
 class LowlevelSimpleController(BaseController):
-    def __init__(self, dt, J:np.ndarray):
-        super().__init__(dt)
+    def __init__(self, J:np.ndarray):
+        super().__init__()
         self.Kp = np.diag(
             [20,20,41]
         )

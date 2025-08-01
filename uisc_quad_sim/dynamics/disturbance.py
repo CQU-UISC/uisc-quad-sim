@@ -86,6 +86,21 @@ class EmptyField(Disturbance):
     def __str__(self):
         return 'Empty Field'
 
+class AirDrag(Disturbance):
+    name = 'D_AIR_DRAG'
+    def __init__(self, drag_coeff=0.1):
+        self.drag_coeff = drag_coeff
+
+    def force(self, x, u):
+        v = x[3:6,:]  # Velocity components
+        return -self.drag_coeff[:,None] * v
+
+    def moment(self, x, u):
+        return np.zeros((3, x.shape[1]))
+
+    def __str__(self):
+        return f'Air Drag Field with coefficient {self.drag_coeff}'
+
 class ConstField(Disturbance):
     name = 'D_CONST'
     def __init__(self,force, moment):
@@ -124,6 +139,32 @@ class TimeVarField(Disturbance):
     
     def __str__(self):
         return f'TimeVar Field: {self.force_val}, {self.moment_val}'
+
+class TimeVarConstField(Disturbance):
+    name = 'D_TVAR_CONST'
+    def __init__(self,force, moment, dt, T):
+        # force and torque has shape (3,)
+        self.force_val = force
+        self.moment_val = moment
+        self.T = T
+        self.tf = 0
+        self.tm = 0
+        self.dt = dt
+
+    def force(self, x, u):
+        scale = np.clip(self.tf/self.T, 0, 1)  # Ensure scale is between 0 and 1
+        force_val = scale * self.force_val
+        self.tf += self.dt
+        return np.tile(force_val, (x.shape[1],1)).T
+
+    def moment(self, x, u):
+        scale = np.clip(self.tm/self.T, 0, 1)  # Ensure scale is between 0 and 1
+        moment_val = scale * self.moment_val
+        self.tm += self.dt
+        return np.tile(moment_val, (x.shape[1],1)).T
+
+    def __str__(self):
+        return f'TimeVarConst Field: {self.force_val}, {self.moment_val}'
 
 class WindField(Disturbance):
     name = 'D_WIND'
@@ -170,3 +211,39 @@ class WindField(Disturbance):
     decay_lat:{self.decay_lat}
     decay_long:{self.decay_long}
     coneslope:{self.coneslope}'''
+
+
+class CompositeFiled(Disturbance):
+    name = 'D_COMPOSITE'
+    def __init__(self, *disturbances: Disturbance):
+        self.disturbances:list[Disturbance] = []
+        for d in disturbances:
+            if not isinstance(d, Disturbance):
+                raise TypeError(f'Expected Disturbance, got {type(d)}')
+            self.disturbances.append(d)
+
+    def add(self, disturbance: Disturbance):
+        if not isinstance(disturbance, Disturbance):
+            raise TypeError(f'Expected Disturbance, got {type(disturbance)}')
+        self.disturbances.append(disturbance)
+    
+    def clear(self):
+        self.disturbances = []
+
+    def __len__(self):
+        return len(self.disturbances)
+
+    def force(self, x, u):
+        f = np.zeros((3, x.shape[1]))
+        for d in self.disturbances:
+            f += d.force(x, u)
+        return f
+
+    def moment(self, x, u):
+        m = np.zeros((3, x.shape[1]))
+        for d in self.disturbances:
+            m += d.moment(x, u)
+        return m
+    
+    def __str__(self):
+        return 'Composite Disturbance: ' + ', '.join([str(d) for d in self.disturbances])
