@@ -6,14 +6,10 @@ class BaseController(ABC):
     Abstract base class for all controllers.
     """
 
-    def __init__(self, dt: float):
+    def __init__(self):
         """
         Initialize the controller with a time step.
-
-        Args:
-            dt (float): Time step for the controller.
         """
-        self.dt = dt
 
     @abstractmethod
     def compute_control(self, state: np.ndarray, *args) -> np.ndarray:

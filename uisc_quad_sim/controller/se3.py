@@ -9,11 +9,11 @@ class SE3Controller(BaseController):
     M_PV = 0b0011
     M_V = 0b0010
 
-    def __init__(self, dt, mode:int):
-        super().__init__(dt)
+    def __init__(self, mode:int):
+        super().__init__()
         self.err_v_integral = np.zeros(3)
         self.max_integral = 10
-        self.kp = 10
+        self.kp = 12
         self.kv = 5
         self.ki = 0
         self.kw = 5

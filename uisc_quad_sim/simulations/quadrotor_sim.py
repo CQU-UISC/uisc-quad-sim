@@ -50,7 +50,7 @@ class QuadSimParams:
         assert 'noise_std' in cfg, "noise_std should be provided"
         dt:float = cfg['dt']
         low_level_dt:float = cfg['low_level_dt'] if 'low_level_dt' in cfg else 0.001
-        quad = Quadrotor.loadFromFile(os.path.join(os.path.dirname(file_path),cfg['quadrotor']))
+        quad = Quadrotor.load(os.path.join(os.path.dirname(file_path),cfg['quadrotor']))
         g:float = cfg['g']
         nums:int = cfg['nums']
         noise_std = np.array(cfg['noise_std'])
@@ -85,7 +85,7 @@ class VecQuadSim(Sim):
                                                 self._quad._J_inv,
                                                 self._quad._drag_coeff,
                                                 self._sim_cfg.disturb)
-        self._low_level_ctrl = LowlevelSimpleController(self._low_level_dt,self._quad._J)
+        self._low_level_ctrl = LowlevelSimpleController(self._quad._J)
         self._motor_dynamics=MotorDynamics(self._quad._tau_inv)
         super().__init__(self._low_level_dt)
         logger.info("Control Mode:{}".format(QuadSimParams.control_modes[self._sim_cfg.mode]))
@@ -208,7 +208,7 @@ class VecQuadSim(Sim):
             # u = u[:,None]
             self._x = self._step(u)
         return self._x
-    
+
     def _log(self,state,control_setpoint):
         '''
             Log the simulation
