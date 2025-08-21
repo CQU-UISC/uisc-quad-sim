@@ -1,7 +1,8 @@
-#ref https://github.com/btx0424/OmniDrones/blob/main/omni_drones/envs/single/hover.py
+# ref https://github.com/btx0424/OmniDrones/blob/main/omni_drones/envs/single/hover.py
 from . import BaseEnv
 import numpy as np
 from ..simulations import QuadSimParams
+
 
 class HoverEnv(BaseEnv):
     r"""
@@ -45,5 +46,6 @@ class HoverEnv(BaseEnv):
 
     or when the episode reaches the maximum length.
     """
+
     def __init__(self, sim_params: QuadSimParams):
         super().__init__(sim_params)

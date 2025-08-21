@@ -64,7 +64,7 @@ python3 -m uisc_quad_sim.examples.examplectrl
 <!-- CONTACT -->
 ## Contact
 
-**Xu Lu** - [lux@cqu.edu.cn](mailto:lux@cqu.edu.cn)   
+**Xu Lu** - [lux@cqu.edu.cn](mailto:lux@cqu.edu.cn)
 **GitHub Organization**: [CQU-UISC](https://github.com/CQU-UISC)
 
 <!-- ACKNOWLEDGMENTS -->
