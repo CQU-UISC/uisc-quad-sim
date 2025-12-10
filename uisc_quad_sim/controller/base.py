@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 
+
 class BaseController(ABC):
     """
     Abstract base class for all controllers.
