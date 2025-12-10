@@ -69,6 +69,7 @@ class SE3Controller(BaseController):
         z_d = a_d / np.linalg.norm(a_d)  # desired z-axis
         x_d = np.array([np.cos(yaw_d), np.sin(yaw_d), 0])  # desired x-axis
         y_d = np.cross(z_d, x_d)  # desired y-axis
+        x_d = np.cross(y_d, z_d)
 
         R_d = np.array([x_d, y_d, z_d]).T
         q_d = mat_q(R_d)

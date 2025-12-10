@@ -16,9 +16,9 @@ logger.add(sys.stdout, level="INFO")
 # Output: u: control input
 
 
-def example_ref(t):
-    p = np.array([np.sin(t), np.cos(t), 1])
-    v = np.array([np.cos(t), -np.sin(t), 0])
+def example_ref(t, r=5.0, omega=1.0):
+    p = np.array([r * np.sin(omega * t), r * np.cos(omega * t), 1])
+    v = np.array([r * omega * np.cos(omega * t), -r * omega * np.sin(omega * t), 0])
     yaw = 0
     return np.concatenate([p, v, [yaw]])
 
@@ -39,7 +39,15 @@ def main():
             x_gt = quad_sim.estimate(gt=True)
             x_ref = example_ref(quad_sim.t)
             ctbr = ctrl.compute_control(x, x_ref)
-            quad_vis.log_state(quad_sim.t, x_gt, quad_sim.motor_speed, ctbr)
+            thrust = quad_sim._quad.thrustMap(quad_sim._motors_omega)  # 4xN
+            real_thrust_acc = np.sum(thrust) / quad_sim._quad.mass
+            real_angvel = x_gt[10:13]
+            control_state = np.array(
+                [real_thrust_acc, real_angvel[0], real_angvel[1], real_angvel[2]]
+            )
+            quad_vis.log_state(
+                quad_sim.t, x_gt, quad_sim.motor_speed, ctbr, control_state
+            )
             cmd = ControlCommand(ControlMode.CTBR, ctbr)
             quad_sim.step(cmd)
             pbar.update(1)

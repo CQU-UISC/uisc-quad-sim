@@ -45,7 +45,8 @@ def mat_q(rot):
     from scipy.spatial.transform import Rotation as R
 
     r = R.from_matrix(rot)
-    return r.as_quat(scalar_first=True)
+    quat = r.as_quat()  # x,y,z,w
+    return np.array([quat[3], quat[0], quat[1], quat[2]])
     # # https://en.wikipedia.org/wiki/Rotation_matrix#Quaternion
     r11, r12, r13 = rot[0]
     r21, r22, r23 = rot[1]

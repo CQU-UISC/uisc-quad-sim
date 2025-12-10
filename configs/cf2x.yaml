@@ -1,0 +1,20 @@
+name: "cf2x"
+mass: 0.027 # kg
+inertia: [0.000014, 0.000014, 0.0000217] # kg*m^2 [Ixx, Iyy, Izz]
+drag_coeff: [0.0001, 0.0001, 0.0001] # N/(m/s)
+
+motors:
+    motor_min: 0 # normalized thrust command for esc
+    motor_max: 1 # normalized thrust command for esc
+    motor_time_constant: 0.02 # s
+    arm_length: 0.0397 # m (39.7mm)
+    kappa: 0.0251 # Nm/N (calculated from km/kf = 7.94e-12 / 3.16e-10)
+    estimate_thrust: false
+    # Max thrust per motor approx 0.1975 N based on 25000 RPM
+    thrust_map: [0.1975, 0.0, 0.0] # [N/1^2, N/1, N] Assumes quadratic relationship
+    thrust_min: 0.0 # N
+    thrust_max: 0.1975 # N (each motor)
+
+limits:
+    omega_max: [15.0, 15.0, 8.0] # rad/s
+    omega_min: [-15.0, -15.0, -8.0] # rad/s

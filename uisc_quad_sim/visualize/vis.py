@@ -1,3 +1,4 @@
+import os
 from typing import Callable
 import rerun as rr
 import numpy as np
@@ -30,7 +31,6 @@ class DroneVisualizer:
                     ],
                     name="3D View",
                 ),
-                # rr.blueprint.TextDocumentView(origin="/logs", name="Logs"),
                 row_shares=[3],
             ),
         )
@@ -71,7 +71,7 @@ class DroneVisualizer:
                     ),
                     row_shares=[1, 1, 1, 1, 1, 1],
                 ),
-                column_shares=[6, 3],
+                column_shares=[7, 3],
             )
         )
         rr.send_blueprint(blueprint)
@@ -100,6 +100,7 @@ class DroneVisualizer:
         state: np.ndarray,
         motor_rpms: list[float],
         control_commands: list[float],
+        control_state: np.ndarray = None,
     ):
         """Log drone state information
 
@@ -116,14 +117,14 @@ class DroneVisualizer:
         angular_velocity = state[10:]
         # Log 3D pose and position
         self._log_3d_pose(position, orientation_quat)
-
+        self._log_3d_drone()
         # Log 2D time series data
         self._log_position(position)
         self._log_velocity(velocity)
         self._log_angular_velocity(angular_velocity)
         self._log_orientation(orientation_quat)
         self._log_motors(motor_rpms)
-        self._log_controls(control_commands)
+        self._log_controls(control_commands, control_state)
         self._drone_path.append(position)
         self._log_path(self._drone_path)
 
@@ -131,14 +132,18 @@ class DroneVisualizer:
         """Log 3D traj"""
         rr.log(
             f"world/drone/{quad_id}/mpc_traj",
-            rr.LineStrips3D(strips=traj, colors=np.tile([255, 0, 0], (len(traj), 1))),
+            rr.LineStrips3D(
+                strips=traj, colors=np.tile([255, 0, 0], (len(traj), 1)), radii=0.02
+            ),
         )
 
     def log_traj_ref(self, traj, quad_id=0):
         """Log 3D traj"""
         rr.log(
             f"world/drone/{quad_id}/traj",
-            rr.LineStrips3D(strips=traj, colors=np.tile([125, 125, 0], (len(traj), 1))),
+            rr.LineStrips3D(
+                strips=traj, colors=np.tile([125, 125, 0], (len(traj), 1)), radii=0.02
+            ),
         )
 
     def log_custom_msg(self, custom_callback: Callable):
@@ -147,7 +152,7 @@ class DroneVisualizer:
     def _log_3d_pose(self, position: np.ndarray, quaternion: np.ndarray, quad_id=0):
         """Log 3D pose visualization"""
         rr.log(
-            f"world/drone/{quad_id}/odom",
+            f"world/drone/{quad_id}/baselink",
             rr.Transform3D(
                 translation=rr.components.Vector3D(xyz=position),
                 rotation=rr.Quaternion(
@@ -162,11 +167,24 @@ class DroneVisualizer:
             ),
         )
 
+    def _log_3d_drone(self, quad_id=0):
+        """Log 3D Mesh"""
+        rr.log(
+            f"world/drone/{quad_id}/baselink/mesh",
+            rr.Asset3D(
+                path=os.path.join(
+                    os.path.dirname(__file__), "../../assets/hummingbird.glb"
+                )
+            ),
+        )
+
     def _log_path(self, path, quad_id=0):
         """Log 3D path"""
         rr.log(
             f"world/drone/{quad_id}/path",
-            rr.LineStrips3D(strips=path, colors=np.tile([0, 255, 0], (len(path), 1))),
+            rr.LineStrips3D(
+                strips=path, colors=np.tile([0, 255, 0], (len(path), 1)), radii=0.01
+            ),
         )
 
     def _log_position(self, position: np.ndarray):
@@ -202,7 +220,10 @@ class DroneVisualizer:
         for i in range(4):
             rr.log(f"motors/motor_{i+1}", rr.Scalar(rpms[i]))
 
-    def _log_controls(self, commands: list[float]):
+    def _log_controls(self, u: list[float], u_sp: list[float]):
         """Log control commands"""
         for i in range(4):
-            rr.log(f"controls/control_{i+1}", rr.Scalar(commands[i]))
+            rr.log(f"controls/u_{i+1}", rr.Scalar(u[i]))
+        if u_sp is not None:
+            for i in range(4):
+                rr.log(f"controls/u_sp_{i+1}", rr.Scalar(u_sp[i]))

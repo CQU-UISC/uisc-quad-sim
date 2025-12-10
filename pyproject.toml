@@ -7,14 +7,13 @@ name = "uisc_quad_sim"
 version = "0.0.1"
 dependencies = [
     "numba>=0.60.0",
-    "loguru==0.7.3",
-    "numpy==1.26.4",
-    "scipy>=1.14.1",
+    "loguru>=0.7.3",
+    "numpy>=1.26.4, <2.0.0",
     "PyYAML==6.0.2",
     "rerun-sdk==0.22.1",
-    "matplotlib==3.7.3",
-    "tqdm==4.67.1",
-    "gymnasium==1.1.1"
+    "matplotlib>=3.7.3",
+    "scipy",
+    "tqdm",
 ]
 requires-python = ">=3.10"
 authors = [
@@ -23,7 +22,7 @@ authors = [
 maintainers = [
   {name = "Xu Lu", email = "lux@cqu.edu.cn"},
 ]
-description = "uisc lab quadrotor simulator"
+description = "cqu uisc lab quadrotor simulator"
 readme = "README.md"
 license = "GPL-3.0"
 license-files = ["LICEN[CS]E*"]
