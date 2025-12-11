@@ -99,8 +99,8 @@ class DroneVisualizer:
         timestep: float,
         state: np.ndarray,
         motor_rpms: list[float],
-        control_commands: list[float],
-        control_state: np.ndarray = None,
+        u_sp: list[float],
+        u_real: np.ndarray = None,
     ):
         """Log drone state information
 
@@ -124,7 +124,7 @@ class DroneVisualizer:
         self._log_angular_velocity(angular_velocity)
         self._log_orientation(orientation_quat)
         self._log_motors(motor_rpms)
-        self._log_controls(control_commands, control_state)
+        self._log_controls(u_real, u_sp)
         self._drone_path.append(position)
         self._log_path(self._drone_path)
 

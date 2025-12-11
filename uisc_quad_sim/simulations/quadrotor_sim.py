@@ -332,6 +332,28 @@ class VecQuadSim(Sim):
         est = state + noise
         return est
 
+    def get_control_input(self, control_mode: ControlMode) -> np.ndarray:
+        control_input = np.zeros((4, self._sim_cfg.nums))
+        if control_mode == ControlMode.CTBR:
+            thrust = self._quad.thrustMap(self._motors_omega)
+            real_ct = np.sum(thrust) / self._quad.mass
+            real_angvel = self._x[10:13, :]
+            control_input[0, :] = real_ct
+            control_input[1:4, :] = self._low_level_ctrl.compute_control(
+                self._x, real_angvel
+            )
+        elif control_mode == ControlMode.CTBM:
+            thrust = self._quad.thrustMap(self._motors_omega)
+            real_wrench = self._quad._B @ thrust
+            control_input[0, :] = real_wrench[0, :] / self._quad.mass
+            control_input[1:4, :] = real_wrench[1:4, :]
+        elif control_mode == ControlMode.SRT:
+            thrust = self._quad.thrustMap(self._motors_omega)
+            control_input = thrust
+        else:
+            raise ValueError("Invalid control mode")
+        return control_input
+
 
 class QuadSim(VecQuadSim):
     def step(self, cmd: ControlCommand):
@@ -348,3 +370,6 @@ class QuadSim(VecQuadSim):
     @property
     def state(self):
         return super().state[:, 0]
+
+    def get_control_input(self, control_mode):
+        return super().get_control_input(control_mode)[:, 0]
