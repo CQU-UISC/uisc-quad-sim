@@ -1,229 +1,202 @@
 import os
-from typing import Callable
+from typing import Callable, Optional
 import rerun as rr
+import rerun.blueprint as rrb
 import numpy as np
 from scipy.spatial.transform import Rotation
 from uuid import uuid4
+from ..dynamics import MotorState, RigidbodyState, BatteryState
 
 
 class DroneVisualizer:
-    def __init__(self, env_num=1):
+    def __init__(self):
         """Initialize the drone visualizer"""
-        self.env_num = env_num
+        self._drone_asset_path = os.path.join(
+            os.path.dirname(__file__), "../../assets/hummingbird.glb"
+        )
         self.reset()
 
     def reset(self):
         """Reset the visualizer"""
         rr.init("uisc_quad_sim.render", recording_id=uuid4(), spawn=True)
-        if self.env_num == 1:
-            self._setup_single_visualization()
+        if os.path.exists(self._drone_asset_path):
+            rr.log(
+                "world/drone/baselink/mesh",
+                rr.Asset3D(path=self._drone_asset_path),
+                static=True,
+            )
         else:
-            self._setup_vectorized_visualization(self.env_num)
+            print(f"Warning: Asset not found at {self._drone_asset_path}")
+        self._setup_blueprint()
 
-    def _setup_vectorized_visualization(self, nums=1):
-        """Configure the visualization view layout"""
-        blueprint = rr.blueprint.Blueprint(
-            rr.blueprint.Vertical(
-                rr.blueprint.Spatial3DView(
-                    origin="/world",
-                    contents=[
-                        "/world/drone/**",
-                    ],
-                    name="3D View",
-                ),
-                row_shares=[3],
-            ),
-        )
-        rr.send_blueprint(blueprint)
-        self._drone_paths = [[] for _ in range(nums)]
+    def _setup_blueprint(self):
+        """Configure the visualization view layout using Rerun 0.22+ API"""
+        plot_paths = [
+            ("Position", "/rigid/position"),
+            ("Velocity", "/rigid/velocity"),
+            ("Angular Velocity", "/rigid/angular_velocity"),
+            ("Orientation (Euler)", "/rigid/euler"),
+            ("Linear Acc", "/rigid/lin_acc"),
+            ("Motor RPM", "/motors/rpm"),
+            ("Battery SoC", "/battery/soc"),
+            ("Voltage", "/voltage/"),
+            ("Current", "/current/"),
+            ("Controls", "/controls"),
+        ]
 
-    def _setup_single_visualization(self):
-        """Configure the visualization view layout"""
-        blueprint = rr.blueprint.Blueprint(
-            rr.blueprint.Horizontal(
-                rr.blueprint.Vertical(
-                    rr.blueprint.Spatial3DView(
+        time_series_views = [
+            rrb.TimeSeriesView(origin=path, name=name) for name, path in plot_paths
+        ]
+
+        blueprint = rrb.Blueprint(
+            rrb.Horizontal(
+                rrb.Vertical(
+                    rrb.Spatial3DView(
                         origin="/world",
-                        contents=[
-                            "/world/drone/**",
-                        ],
                         name="3D View",
+                        # time_ranges=[
+                        #     rrb.VisibleTimeRange(
+                        #         "time_s",
+                        #         # start=rrb.TimeRangeBoundary.absolute(time=0.0),
+                        #         start=rrb.TimeRangeBoundary.cursor_relative(
+                        #             seconds=-15.0
+                        #         ),
+                        #         end=rrb.TimeRangeBoundary.cursor_relative(),
+                        #     )
+                        # ],
                     ),
-                    # rr.blueprint.TextDocumentView(origin="/logs", name="Logs"),
                     row_shares=[3],
                 ),
-                rr.blueprint.Vertical(
-                    rr.blueprint.TimeSeriesView(
-                        origin="/state/position", name="Position"
-                    ),
-                    rr.blueprint.TimeSeriesView(
-                        origin="/state/velocity", name="Velocity"
-                    ),
-                    rr.blueprint.TimeSeriesView(
-                        origin="/state/angular_velocity", name="Angular Velocity"
-                    ),
-                    rr.blueprint.TimeSeriesView(
-                        origin="/state/euler", name="Orientation"
-                    ),
-                    rr.blueprint.TimeSeriesView(origin="/motors", name="Motors RPM"),
-                    rr.blueprint.TimeSeriesView(
-                        origin="/controls", name="Control Commands"
-                    ),
-                    row_shares=[1, 1, 1, 1, 1, 1],
-                ),
-                column_shares=[7, 3],
-            )
+                rrb.Vertical(*time_series_views),
+                column_shares=[2, 1],
+            ),
+            rrb.SelectionPanel(state="hidden"),
         )
         rr.send_blueprint(blueprint)
-        self._drone_path = []
 
-    # vectorized visualization
-    def log_states(self, timestep: float, states: np.ndarray):
-        """
-        Log drone state information:
-        Args:
-            timestep: Simulation timestep
-            states: State information for all drones has shape (13,N)
-        """
-        positions = states[:3, :].T
-        orientations = states[6:10, :].T
-        for i in range(states.shape[1]):
-            self._log_3d_pose(positions[i], orientations[i], i)
-            self._drone_paths[i].append(positions[i])
-            self._log_path(self._drone_paths[i], i)
-        rr.set_time_seconds("sim_time", timestep)
+    def step(self, time_s: float):
+        """Advance the visualizer by one step"""
+        rr.set_time_seconds("time_s", time_s)
 
-    # single visualization
-    def log_state(
-        self,
-        timestep: float,
-        state: np.ndarray,
-        motor_rpms: list[float],
-        u_sp: list[float],
-        u_real: np.ndarray = None,
-    ):
-        """Log drone state information
+    def log_motor_states(self, motor_states: MotorState):
+        """Log motor states efficiently"""
+        size_of_motor = len(motor_states.rpm)
+        for i in range(size_of_motor):
+            rpm = motor_states.rpm[i]
+            v = motor_states.v[i]
+            c = motor_states.i[i]
+            rr.log(f"motors/rpm/motor_{i+1}", rr.Scalar(rpm))
+            rr.log(f"voltage/motor_{i+1}", rr.Scalar(v))
+            rr.log(f"current/motor_{i+1}", rr.Scalar(c))
+        rr.log("current/motor_total", rr.Scalar(np.sum(motor_states.i)))
 
-        Args:
-            timestep: Simulation timestep
-            state: State information [x, y, z, vx, vy, vz, qw, qx, qy, qz, wx, wy, wz]
-            motor_rpms: Four motor RPM values [rpm1, rpm2, rpm3, rpm4]
-            control_commands: Four control commands [cmd1, cmd2, cmd3, cmd4]
-        """
-        rr.set_time_seconds("sim_time", timestep)
-        position = state[:3]
-        velocity = state[3:6]
-        orientation_quat = state[6:10]
-        angular_velocity = state[10:]
-        # Log 3D pose and position
-        self._log_3d_pose(position, orientation_quat)
-        self._log_3d_drone()
-        # Log 2D time series data
-        self._log_position(position)
-        self._log_velocity(velocity)
-        self._log_angular_velocity(angular_velocity)
-        self._log_orientation(orientation_quat)
-        self._log_motors(motor_rpms)
-        self._log_controls(u_real, u_sp)
-        self._drone_path.append(position)
-        self._log_path(self._drone_path)
+    def log_battery_states(self, battery_states: BatteryState):
+        rr.log("battery/soc", rr.Scalar(battery_states.soc))
+        rr.log("voltage/ocv", rr.Scalar(battery_states.v_ocv))
+        rr.log("voltage/term", rr.Scalar(battery_states.v_term))
 
-    def log_mpc_traj(self, traj, quad_id=0):
-        """Log 3D traj"""
+    def log_rigidbody_states(self, rb_states: RigidbodyState):
+        """Log rigidbody states"""
+        x = rb_states.x
+        position = x[:3]
+        velocity = x[3:6]
+        quat_wxyz = x[6:10]
+        angular_vel = x[10:13]
+        lin_acc = x[13:16]
+
         rr.log(
-            f"world/drone/{quad_id}/mpc_traj",
-            rr.LineStrips3D(
-                strips=traj, colors=np.tile([255, 0, 0], (len(traj), 1)), radii=0.02
+            "world/drone/baselink",
+            rr.Transform3D(
+                translation=position,
+                # [w, x, y, z] -> [x, y, z, w]
+                rotation=rr.Quaternion(
+                    xyzw=[quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]]
+                ),
+                axis_length=0.5,
             ),
         )
 
-    def log_traj_ref(self, traj, quad_id=0):
-        """Log 3D traj"""
-        rr.log(
-            f"world/drone/{quad_id}/traj",
-            rr.LineStrips3D(
-                strips=traj, colors=np.tile([125, 125, 0], (len(traj), 1)), radii=0.02
-            ),
-        )
+        # rr.log(
+        #     "world/drone/position_trace",
+        #     rr.Points3D(positions=position, colors=[[0, 255, 0]], radii=0.01)
+        # )
+        if hasattr(self, "_cached_traj_pos"):
+            self._cached_traj_pos = np.vstack([self._cached_traj_pos, position])
+            rr.log(
+                f"world/drone/position_trace",
+                rr.LineStrips3D.from_fields(strips=[self._cached_traj_pos]),
+            )
+        else:
+            rr.log(
+                f"world/drone/position_trace",
+                rr.LineStrips3D(strips=[position], colors=[[0, 255, 0]], radii=0.01),
+            )
+            self._cached_traj_pos = position.copy()
+
+        self._log_vec3(f"rigid/position", position)
+        self._log_vec3(f"rigid/velocity", velocity)
+        self._log_vec3(f"rigid/angular_velocity", angular_vel)
+        self._log_vec3(f"rigid/lin_acc", lin_acc)
+
+        euler = Rotation.from_quat(
+            [quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]]
+        ).as_euler("xyz")
+        self._log_vec3(f"rigid/euler", euler, labels=["roll", "pitch", "yaw"])
+
+    def log_controls(self, u_sp: np.ndarray, u_real: Optional[np.ndarray] = None):
+        """Log control commands"""
+        for i, val in enumerate(u_sp):
+            rr.log(f"controls/u_sp_{i+1}", rr.Scalar(val))
+
+        if u_real is not None:
+            for i, val in enumerate(u_real):
+                rr.log(f"controls/u_real_{i+1}", rr.Scalar(val))
+
+    def _log_vec3(self, root_path: str, vector: np.ndarray, labels=["x", "y", "z"]):
+        """Helper to log vector components efficiently"""
+        for i, label in enumerate(labels):
+            rr.log(f"{root_path}/{label}", rr.Scalar(vector[i]))
+
+    def log_ref_traj(self, traj_pos: np.ndarray):
+        if hasattr(self, "_cached_ref_traj_pos"):
+            self._cached_ref_traj_pos = np.vstack([self._cached_ref_traj_pos, traj_pos])
+            rr.log(
+                f"world/drone/ref_traj",
+                rr.LineStrips3D.from_fields(strips=[self._cached_ref_traj_pos]),
+            )
+        else:
+            rr.log(
+                f"world/drone/ref_traj",
+                rr.LineStrips3D(strips=[traj_pos], colors=[[0, 0, 255]], radii=0.01),
+            )
+            self._cached_ref_traj_pos = traj_pos.copy()
+
+    def log_mpc_ref_traj(self, traj: "List[RigidbodyState]"):
+        traj_pos = np.array([state.pos for state in traj])
+        if hasattr(self, "_mpc_ref_traj_received"):
+            rr.log(
+                f"world/drone/mpc_ref_traj",
+                rr.LineStrips3D.from_fields(strips=[traj_pos]),
+            )
+        else:
+            rr.log(
+                f"world/drone/mpc_ref_traj",
+                rr.LineStrips3D(strips=[traj_pos], colors=[[0, 255, 255]], radii=0.02),
+            )
+            self._mpc_ref_traj_received = True
+
+    def log_mpc_traj(self, traj: np.ndarray):
+        if hasattr(self, "_mpc_traj_received"):
+            rr.log(
+                f"world/drone/mpc_traj",
+                rr.LineStrips3D.from_fields(strips=[traj]),
+            )
+        else:
+            rr.log(
+                f"world/drone/mpc_traj",
+                rr.LineStrips3D(strips=[traj], colors=[[255, 0, 0]], radii=0.02),
+            )
+            self._mpc_traj_received = True
 
     def log_custom_msg(self, custom_callback: Callable):
         custom_callback(rr)
-
-    def _log_3d_pose(self, position: np.ndarray, quaternion: np.ndarray, quad_id=0):
-        """Log 3D pose visualization"""
-        rr.log(
-            f"world/drone/{quad_id}/baselink",
-            rr.Transform3D(
-                translation=rr.components.Vector3D(xyz=position),
-                rotation=rr.Quaternion(
-                    xyzw=[
-                        quaternion[1],  # x
-                        quaternion[2],  # y
-                        quaternion[3],  # z
-                        quaternion[0],  # w
-                    ]
-                ),
-                axis_length=0.6,
-            ),
-        )
-
-    def _log_3d_drone(self, quad_id=0):
-        """Log 3D Mesh"""
-        rr.log(
-            f"world/drone/{quad_id}/baselink/mesh",
-            rr.Asset3D(
-                path=os.path.join(
-                    os.path.dirname(__file__), "../../assets/hummingbird.glb"
-                )
-            ),
-        )
-
-    def _log_path(self, path, quad_id=0):
-        """Log 3D path"""
-        rr.log(
-            f"world/drone/{quad_id}/path",
-            rr.LineStrips3D(
-                strips=path, colors=np.tile([0, 255, 0], (len(path), 1)), radii=0.01
-            ),
-        )
-
-    def _log_position(self, position: np.ndarray):
-        """Log position components"""
-        components = ["x", "y", "z"]
-        for i, comp in enumerate(components):
-            rr.log(f"state/position/{comp}", rr.Scalar(position[i]))
-
-    def _log_velocity(self, velocity: np.ndarray):
-        """Log velocity components"""
-        components = ["x", "y", "z"]
-        for i, comp in enumerate(components):
-            rr.log(f"state/velocity/{comp}", rr.Scalar(velocity[i]))
-
-    def _log_angular_velocity(self, angular_velocity: np.ndarray):
-        """Log angular velocity components"""
-        components = ["x", "y", "z"]
-        for i, comp in enumerate(components):
-            rr.log(f"state/angular_velocity/{comp}", rr.Scalar(angular_velocity[i]))
-
-    def _log_orientation(self, quaternion: np.ndarray):
-        """Log Euler angle orientation"""
-        quaternion = np.array(
-            [quaternion[1], quaternion[2], quaternion[3], quaternion[0]]
-        )
-        euler = Rotation.from_quat(quaternion).as_euler("xyz")
-        components = ["roll", "pitch", "yaw"]
-        for i, comp in enumerate(components):
-            rr.log(f"state/euler/{comp}", rr.Scalar(euler[i]))
-
-    def _log_motors(self, rpms: list[float]):
-        """Log motor RPM values"""
-        for i in range(4):
-            rr.log(f"motors/motor_{i+1}", rr.Scalar(rpms[i]))
-
-    def _log_controls(self, u: list[float], u_sp: list[float]):
-        """Log control commands"""
-        for i in range(4):
-            rr.log(f"controls/u_{i+1}", rr.Scalar(u[i]))
-        if u_sp is not None:
-            for i in range(4):
-                rr.log(f"controls/u_sp_{i+1}", rr.Scalar(u_sp[i]))

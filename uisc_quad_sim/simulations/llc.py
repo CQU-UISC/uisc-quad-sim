@@ -1,19 +1,25 @@
-from .base import BaseController
 import numpy as np
+from dataclasses import dataclass
 
 
-class LowlevelSimpleController(BaseController):
-    def __init__(self, J: np.ndarray):
+@dataclass
+class LLCParams:
+    inertia: np.ndarray  # 1-d array of shape (3,)
+    kp: np.ndarray  # 1-d array of shape (3,)
+
+
+class LowLevelSimpleController:
+    def __init__(self, params: LLCParams):
         super().__init__()
-        self.Kp = np.diag([20, 20, 41])
-        self.J = J
+        self.Kp = np.diag(params.kp)
+        self.J = np.diag(params.inertia)
 
     def compute_control(self, state, *args):
         """
             Input:
-                u: control inputs [bodyrates] unit: [rad/s] shape:[3,N]
+                u: control inputs [bodyrates] unit: [rad/s] shape:[3]
             Output:
-                torque: [3,N] unit: [Nm] shape:[3,N]
+                torque: [3] unit: [Nm] shape:[3]
 
             # Control law:
             w_dot = J_inv @ (tau - w x J @ w)\\
@@ -25,11 +31,9 @@ class LowlevelSimpleController(BaseController):
             v_dot = -w_err @  J_inv @ (J @ Kp * w_err) <= 0
         """
         J = self.J
-        Kp = np.diag([20, 20, 41])
+        Kp = self.Kp
         w = state[10:13]
         w_d = args[0]
-        w_err = w_d - w  # [3,N]
-        # J_inv@(ext_moment + tau - np.cross(w.T,np.dot(J,w).T).T)
-        #
-        tau = J @ Kp @ w_err + np.cross(w.T, np.dot(J, w).T).T
+        w_err = w_d - w  # [3]
+        tau = J @ (Kp @ w_err) + np.cross(w, J @ w)
         return tau

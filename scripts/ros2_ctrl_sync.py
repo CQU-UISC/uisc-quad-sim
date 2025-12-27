@@ -1,37 +1,34 @@
-import os
 import numpy as np
 
 import rclpy
 from rclpy.node import Node
 from px4ctrl_msgs.msg import Command
 from px4ctrl_msgs.srv import StepSim
-from uisc_quad_sim.quadrotor import Quadrotor
 from uisc_quad_sim.controller.se3 import SE3Controller
+from uisc_quad_sim.dynamics.rigidbody import RigidbodyState
+from uisc_quad_sim.utils.quaternion import from_euler
 
 
-def example_ref(t):
-    """Generates a circular reference trajectory."""
-    p = np.array([np.sin(t), np.cos(t), 1.0])
-    v = np.array([np.cos(t), -np.sin(t), 0.0])
-    yaw = 0.0
-    return np.concatenate([p, v, [yaw]])
+def example_ref(t, r, omega) -> RigidbodyState:
+    x = np.zeros(RigidbodyState.shape)
+    rg_state = RigidbodyState(x=x)
+    rg_state.pos = np.array([r * np.sin(omega * t), r * np.cos(omega * t), 1])
+    rg_state.vel = np.array(
+        [r * omega * np.cos(omega * t), -r * omega * np.sin(omega * t), 0]
+    )
+    rg_state.lin_acc = np.array(
+        [-r * omega**2 * np.sin(omega * t), -r * omega**2 * np.cos(omega * t), 0]
+    )
+    # let head to the center(0,0)
+    yaw = np.arctan2(-rg_state.pos[1], -rg_state.pos[0])
+    rg_state.quat = from_euler(0, 0, yaw)
+    return rg_state
 
 
 class SE3Node(Node):
     def __init__(self):
         super().__init__("se3_node")
-
-        try:
-            config_path = os.path.join(
-                os.path.dirname(__file__), "../configs/xi35.yaml"
-            )
-            self.quad = Quadrotor.load(config_path)
-        except Exception as e:
-            self.get_logger().fatal(f"Failed to load quadrotor config: {e}")
-            return
-
-        self.ctrl = SE3Controller(SE3Controller.M_PV)
-
+        self.ctrl = SE3Controller()
         # --- Service Client Setup ---
         self.sim_step_client = self.create_client(StepSim, "/px4ctrl/step_sim")
         while not self.sim_step_client.wait_for_service(timeout_sec=1.0):
@@ -69,20 +66,21 @@ class SE3Node(Node):
                 break
 
             self.t += self.dt
-            ref = example_ref(self.t)
+            ref_state = example_ref(self.t)
 
             if self.state is None:
                 self.get_logger().warn("State is None, skipping control calculation.")
                 continue
 
             current_state_array = np.array(self.state.x)
-
+            rb_state = RigidbodyState(x=np.zeros(RigidbodyState.shape))
+            rb_state.x[:13] = current_state_array
             command_u = self.ctrl.compute_control(
-                current_state_array,
-                ref,
+                rb_state,
+                ref_state,
             )
 
-            request.command.u = command_u.tolist()
+            request.command.u = command_u.u.tolist()
             request.command.type = self.command.type
             request.command_valid = True
 

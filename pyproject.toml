@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "uisc_quad_sim"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
     "numba>=0.60.0",
     "loguru>=0.7.3",

@@ -1,0 +1,56 @@
+name: "xi35"
+low_level_dt : 0.005
+high_level_dt : 0.01
+
+# low-level controller, from px4 angular rate controller
+low_level:
+    mixer:
+        pos_x: [0.05374, -0.05374, 0.05374, -0.05374] # m
+        pos_y: [0.05374, -0.05374, -0.05374, 0.05374] # m
+        cw: [-1, -1, 1, 1]  # motor rotation direction: 1 for cw, -1 for ccw
+        thrust_map: [8.0, 0.0001, 0.0] # [N/1^2, N/1, N] (thrust = thrust_map[0]*cmd^2 + thrust_map[1]*cmd + thrust_map[2])
+        k_tau_z: 0.03 # Nm/N for z torque calculation
+    low_level_ctrl:
+        inertia: [0.0025, 0.0021, 0.0043] # kg*m^2
+        kp: [40.0,40.0,21.0] # angular rate P gains
+
+battery:
+    n_cells: 6 # number of battery cells in series(default: 6S)
+    capacity_mah: 3000.0 # battery capacity in mAh (default: 2200mAh)
+    r_internal: 0.15 # internal resistance in Ohms
+    v_cuttoff: 2.5 # cutoff voltage per cell in Volt
+    v_full: 4.2 # full charge voltage per cell in Volts
+    i_avionics: 0.5 # avionics current draw in Amps
+    soc_ocv_coeffs:  [2.59015588, 7.73913782, -30.47793475, 62.98798581, -60.57264964, 21.87660915] # open circuit voltage polynomial coefficients (6th order polynomial)
+
+motors:
+    using_battery: true # whether to use battery model for motor rpm calculation
+    # geom
+    pos_x: [0.05374, -0.05374, 0.05374, -0.05374] # m
+    pos_y: [0.05374, -0.05374, -0.05374, 0.05374] # m
+    cw: [-1, -1, 1, 1]  # motor rotation direction: 1 for cw, -1 for ccw
+    # dynamics
+    tau_up: 0.033       # motor up time constant: s
+    tau_down: 0.05      # motor down time constant: s
+    k_v: 1800.0         # motor speed constant: rpm/V
+    thrust_coeff: 3.888157915200831e-09 # motor thrust coeff: N/(rpm)^2
+    torque_coeff: 8.553947413441829e-11 # motor torque coeff: Nm/(rpm)^2
+    # electrical
+    i_idle: 0.5         # motor idle current: A
+    v_idle: 0.9         # motor idle voltage: V (to calculate min rpm)
+    i_max: 13.0         # motor max current: A
+    v_max: 25.2         # max voltage: V to calculate max rpm
+
+rigid_body:
+    g: 9.81 # m/s^2
+    mass: 0.772 # kg
+    inertia: [0.0025, 0.0021, 0.0043] # kg*m^2
+    drag_coeff: [0.2, 0.2, 0.4] # N/(m/s)
+
+estimator:
+    position_std: 0.02 # m
+    velocity_std: 0.02 # m/s
+    attitude_std: 0.01 # unitless quaternion
+    ang_velocity_std: 0.01 # rad/s
+    lin_acc_std: 0.01 # m/s^2
+    ang_acc_std: 0.01 # rad/s^2

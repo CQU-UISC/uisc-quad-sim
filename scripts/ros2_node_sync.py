@@ -8,8 +8,8 @@ from rclpy.time import Time
 
 from px4ctrl_msgs.msg import State, Command
 from px4ctrl_msgs.srv import StepSim
-from uisc_quad_sim.simulations import QuadSim, QuadSimParams
-from uisc_quad_sim.simulations.quadrotor_sim import ControlCommand, ControlMode
+from uisc_quad_sim.simulations import QuadSim, QuadParams
+from uisc_quad_sim.simulations.quadrotor import ControlCommand, ControlMode
 from uisc_quad_sim.visualize.vis import DroneVisualizer
 
 
@@ -19,9 +19,9 @@ class SimNode(Node):
         self.sim_step_service = self.create_service(
             StepSim, "step_sim", self.sim_step_callback
         )
-        self.sim_params = QuadSimParams.load(
+        self.sim_params = QuadParams(
             os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "../configs/ctbr.yaml"
+                os.path.dirname(os.path.abspath(__file__)), "../configs/uisc_xi35.yaml"
             )
         )
         self.quad_sim = QuadSim(self.sim_params)
@@ -42,8 +42,8 @@ class SimNode(Node):
         nanosec = int((sim_time_sec - sec) * 1e9)
         msg.header.stamp = Time(seconds=sec, nanoseconds=nanosec).to_msg()
         msg.header.frame_id = "world"
-        msg.x = self.quad_sim.estimate().tolist()
-        msg.rotors = self.quad_sim.motor_speed.tolist()
+        msg.x = self.quad_sim.rb_state.x[:13].tolist()
+        msg.rotors = self.quad_sim.motor_state.rpm.tolist()
         self.state_publisher_.publish(msg)
 
     def sim_step_callback(self, request: StepSim.Request, response: StepSim.Response):
@@ -51,17 +51,21 @@ class SimNode(Node):
         response.state.header.stamp = self.get_clock().now().to_msg()
         if not request.command_valid:
             self.get_logger().info("Received empty command, returning current state")
-            response.state.x = self.quad_sim.estimate().tolist()
+            response.state.x = self.quad_sim.rb_state.x[:13].tolist()
             return response
         if command.type not in self.type_map:
             self.get_logger().error(f"Unsupported command type: {command.type}")
             return response
         self.get_logger().info(f"Received command: {command.type}, u: {command.u}")
         cmd = ControlCommand(type=self.type_map[command.type], u=np.array(command.u))
-        x_est = self.quad_sim.step(cmd)
-        x_gt = self.quad_sim.estimate(gt=True)
-        self.quad_vis.log_state(self.quad_sim.t, x_gt, self.quad_sim.motor_speed, cmd.u)
-        response.state.x = x_est.tolist()
+        rb_state = self.quad_sim.step(cmd)
+        self.quad_vis.step(self.quad_sim.t)
+        self.quad_vis.log_rigidbody_states(rb_state)
+        self.quad_vis.log_battery_states(self.quad_sim.batt_state)
+        self.quad_vis.log_motor_states(self.quad_sim.motor_state)
+        self.quad_vis.log_controls(command.u)
+        self.get_logger().info(f"Post-step state estimate: {rb_state.x[:13]}")
+        response.state.x = rb_state.x[:13].tolist()
         return response
 
 
