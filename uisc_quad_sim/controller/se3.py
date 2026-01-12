@@ -74,7 +74,7 @@ class SE3Controller(BaseController):
         R_d = np.array([x_d, y_d, z_d]).T
         q_d = mat_q(R_d)
 
-        e_q = q_mult(q_d, q_inv(q))
+        e_q = q_mult(q_inv(q), q_d)
         e_q_s = e_q[0]
         e_q_v = e_q[1:]
 

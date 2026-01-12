@@ -19,7 +19,7 @@ logger.add(sys.stdout, level="INFO")
 def example_ref(t, r=5.0, omega=1.0):
     p = np.array([r * np.sin(omega * t), r * np.cos(omega * t), 1])
     v = np.array([r * omega * np.cos(omega * t), -r * omega * np.sin(omega * t), 0])
-    yaw = 0
+    yaw = t
     return np.concatenate([p, v, [yaw]])
 
 

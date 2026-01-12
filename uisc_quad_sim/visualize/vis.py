@@ -10,6 +10,9 @@ class DroneVisualizer:
     def __init__(self, env_num=1):
         """Initialize the drone visualizer"""
         self.env_num = env_num
+        self._drone_mesh = rr.Asset3D(
+            path=os.path.join(os.path.dirname(__file__), "../../assets/hummingbird.glb")
+        )
         self.reset()
 
     def reset(self):
@@ -72,10 +75,12 @@ class DroneVisualizer:
                     row_shares=[1, 1, 1, 1, 1, 1],
                 ),
                 column_shares=[7, 3],
-            )
+            ),
+            rr.blueprint.SelectionPanel(state="hidden"),
         )
         rr.send_blueprint(blueprint)
         self._drone_path = []
+        self._log_3d_drone()
 
     # vectorized visualization
     def log_states(self, timestep: float, states: np.ndarray):
@@ -117,7 +122,6 @@ class DroneVisualizer:
         angular_velocity = state[10:]
         # Log 3D pose and position
         self._log_3d_pose(position, orientation_quat)
-        self._log_3d_drone()
         # Log 2D time series data
         self._log_position(position)
         self._log_velocity(velocity)
@@ -169,14 +173,7 @@ class DroneVisualizer:
 
     def _log_3d_drone(self, quad_id=0):
         """Log 3D Mesh"""
-        rr.log(
-            f"world/drone/{quad_id}/baselink/mesh",
-            rr.Asset3D(
-                path=os.path.join(
-                    os.path.dirname(__file__), "../../assets/hummingbird.glb"
-                )
-            ),
-        )
+        rr.log(f"world/drone/{quad_id}/baselink/mesh", self._drone_mesh, static=True)
 
     def _log_path(self, path, quad_id=0):
         """Log 3D path"""
