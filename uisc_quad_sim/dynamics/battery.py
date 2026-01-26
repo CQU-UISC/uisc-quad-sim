@@ -13,7 +13,9 @@ class BatteryParams:
 
     # Electrical parameters
     r_internal: float  # Internal resistance in Ohms
-    v_cuttoff: float  # Cutoff voltage per cell in Volts
+    r_polarization: float  # Polarization resistance in Ohms
+    c_polarization: float  # Polarization capacitance in Farads
+    v_cutoff: float  # Cutoff voltage per cell in Volts
     v_full: float  # Full charge voltage per cell in Volts
 
     i_avionics: float  # Avionics current draw in Amps
@@ -22,10 +24,10 @@ class BatteryParams:
 
 @dataclass
 class BatteryState:
-    x: np.ndarray  # state vector shape(1)
+    x: np.ndarray  # state vector shape(2,)
     v_ocv: float
     v_term: float
-    shape: tuple = (1,)
+    shape: tuple = (2,)
 
     @property
     def soc(self) -> float:
@@ -34,6 +36,14 @@ class BatteryState:
     @soc.setter
     def soc(self, value: float):
         self.x[0] = float(value)
+
+    @property
+    def v_polarization(self) -> float:
+        return self.x[1]
+
+    @v_polarization.setter
+    def v_polarization(self, value: float):
+        self.x[1] = float(value)
 
 
 @dataclass
@@ -47,23 +57,40 @@ class BatteryControl:
 
 @nb.njit
 def dynamics_fn(
-    x: np.ndarray, u: np.ndarray, capacity_as: float, i_avionics: float
+    x: np.ndarray,
+    u: np.ndarray,
+    capacity_as: float,
+    i_avionics: float,
+    r_pol: float,
+    c_pol: float,
 ) -> np.ndarray:
     """Battery dynamics model"""
     # Open circuit voltage model (linear approximation)
+    # x[0]: state of charge (soc)
+    # x[1]: polarization voltage (v_polarization)
     x_dot: np.ndarray = np.zeros_like(x)
+    v_pol = x[1]
     i_motor = np.sum(u)
     i_total = i_motor + i_avionics
     soc_dot = -i_total / capacity_as
     x_dot[0] = soc_dot
+    # dVp/dt = I/Cp - Vp/(Rp*Cp)
+    vp_dot = (i_total / c_pol) - (v_pol / (r_pol * c_pol))
+    x_dot[1] = vp_dot
     return x_dot
 
 
 @nb.njit
 def step_fn(
-    x: np.ndarray, u: np.ndarray, dt: float, capacity_as: float, i_avionics: float
+    x: np.ndarray,
+    u: np.ndarray,
+    dt: float,
+    capacity_as: float,
+    i_avionics: float,
+    r_pol: float,
+    c_pol: float,
 ) -> np.ndarray:
-    dynamics_args = (capacity_as, i_avionics)
+    dynamics_args = (capacity_as, i_avionics, r_pol, c_pol)
     x_new = integrate_fn(dynamics_fn, x, u, dt, dynamics_args)
     return x_new
 
@@ -78,6 +105,7 @@ class Battery(Dynamics):
         x0 = np.array(
             [
                 1.0,  # soc
+                0.0,  # v_polarization
             ]
         )
         return BatteryState(x=x0, v_ocv=v_ocv_init, v_term=v_ocv_init)
@@ -101,7 +129,9 @@ class Battery(Dynamics):
         """Terminal voltage"""
         v_ocv = self._v_ocv(battery_state)
         i_motor = np.sum(battery_control.motor_currents)
-        v_term = v_ocv - (i_motor + self._params.i_avionics) * self._params.r_internal
+        i_total = i_motor + self._params.i_avionics
+        v_pol = battery_state.v_polarization
+        v_term = v_ocv - (i_total * self._params.r_internal) - v_pol
         return v_term
 
     def step(
@@ -112,11 +142,17 @@ class Battery(Dynamics):
         current_soc = battery_state.x
         motor_currents = battery_control.motor_currents
 
-        next_soc = step_fn(
-            current_soc, motor_currents, dt, self._capacity_as, self._params.i_avionics
+        next_x = step_fn(
+            current_soc,
+            motor_currents,
+            dt,
+            self._capacity_as,
+            self._params.i_avionics,
+            self._params.r_polarization,
+            self._params.c_polarization,
         )
-
-        battery_state.x = np.clip(next_soc, 0.0, 1.0)
+        battery_state.x = next_x
+        battery_state.x[0] = np.clip(battery_state.x[0], 0.0, 1.0)
         battery_state.v_ocv = self._v_ocv(battery_state)
         battery_state.v_term = self._v_term(battery_state, battery_control)
         return battery_state

@@ -205,19 +205,21 @@ def compute_accelerations(
 ) -> np.ndarray:
     x_dot = dynamics_fn(x, u, mass, g, J, J_inv, ext_force, ext_moment)
     res = np.empty(9)
-    res[0:3] = x_dot[3:6]  # vel_dot -> lin_acc
-    res[3:6] = x_dot[10:13]  # omega_dot -> ang_acc
+    lin_acc = x_dot[3:6]  # vel_dot -> lin_acc
+    ang_acc = x_dot[10:13]  # omega_dot -> ang_acc
     # Body frame linear acceleration
     qw, qx, qy, qz = x[6], x[7], x[8], x[9]
-    R_inertial_to_body = np.array(
+    R_body_to_inertial = np.array(
         [
-            [1 - 2 * (qy**2 + qz**2), 2 * (qx * qy + qw * qz), 2 * (qx * qz - qw * qy)],
-            [2 * (qx * qy - qw * qz), 1 - 2 * (qx**2 + qz**2), 2 * (qy * qz + qw * qx)],
-            [2 * (qx * qz + qw * qy), 2 * (qy * qz - qw * qx), 1 - 2 * (qx**2 + qy**2)],
+            [1 - 2 * (qy**2 + qz**2), 2 * (qx * qy - qw * qz), 2 * (qx * qz + qw * qy)],
+            [2 * (qx * qy + qw * qz), 1 - 2 * (qx**2 + qz**2), 2 * (qy * qz - qw * qx)],
+            [2 * (qx * qz - qw * qy), 2 * (qy * qz + qw * qx), 1 - 2 * (qx**2 + qy**2)],
         ]
     )
-    lin_acc_inertial = x_dot[3:6]
-    blin_acc = R_inertial_to_body @ lin_acc_inertial
+    R_inertial_to_body = R_body_to_inertial.T
+    blin_acc = R_inertial_to_body @ lin_acc
+    res[0:3] = lin_acc
+    res[3:6] = ang_acc
     res[6:9] = blin_acc
     return res
 
@@ -265,10 +267,8 @@ class Rigidbody(Dynamics):
             ext_force,
             ext_moment,
         )
-
-        rigid_state.x[0:13] = x_new_ode
         accs = compute_accelerations(
-            x_new_ode,
+            x_ode,
             u,
             self._params.mass,
             self._params.g,
@@ -277,7 +277,8 @@ class Rigidbody(Dynamics):
             ext_force,
             ext_moment,
         )
-        rigid_state.x[13:16] = accs[0:3]  # lin_acc
-        rigid_state.x[16:19] = accs[3:6]  # ang_acc
-        rigid_state.x[19:22] = accs[6:9]  # blin_acc
+        rigid_state.x[0:13] = x_new_ode
+        rigid_state.lin_acc = accs[0:3]  # lin_acc
+        rigid_state.ang_acc = accs[3:6]  # ang_acc
+        rigid_state.blin_acc = accs[6:9]  # blin_acc
         return rigid_state

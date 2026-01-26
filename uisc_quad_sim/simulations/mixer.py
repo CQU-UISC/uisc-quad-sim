@@ -32,6 +32,7 @@ class Mixer:
         motor_thrusts = np.zeros(n_motors)
         wrench = np.array([thrust, tau[0], tau[1], tau[2]])  # [4]
         motor_thrusts = self.B_inv @ wrench  # [n_motors]
+        np.clip(motor_thrusts, 0.0, None, out=motor_thrusts)
         motor_cmds = np.zeros(n_motors)
         for i in range(n_motors):
             motor_cmds[i] = self._thrust_to_cmd(motor_thrusts[i])

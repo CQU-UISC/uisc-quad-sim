@@ -29,7 +29,9 @@ class QuadParams:
             n_cells=b_cfg["n_cells"],
             capacity_mah=b_cfg["capacity_mah"],
             r_internal=b_cfg["r_internal"],
-            v_cuttoff=b_cfg["v_cuttoff"],
+            r_polarization=b_cfg["r_polarization"],
+            c_polarization=b_cfg["c_polarization"],
+            v_cutoff=b_cfg["v_cutoff"],
             v_full=b_cfg["v_full"],
             i_avionics=b_cfg["i_avionics"],
             soc_ocv_coeffs=np.array(b_cfg["soc_ocv_coeffs"]),
@@ -204,12 +206,12 @@ class QuadSim:
         """
 
         # 1. Prepare Motor Control
-        # Motor voltage depends on Battery terminal voltage
-        v_term = self._batt_state.v_term
+        # Motor voltage depends on Battery open-circuit voltage
+        v_ocv = self._batt_state.v_ocv
 
         # Combine voltage and setpoints into control matrix
         # u shape: (2, 4) -> [ [v, v, v, v], [cmd, cmd, cmd, cmd] ]
-        u_motor = np.vstack([np.full(4, v_term), esc_setpoints])
+        u_motor = np.vstack([np.full(4, v_ocv), esc_setpoints])
         motor_ctrl = MotorControl(u=u_motor)
 
         # 2. Step Motors

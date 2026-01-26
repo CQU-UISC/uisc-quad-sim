@@ -59,7 +59,7 @@ class MotorControl:
     shape: tuple = (2, 4)
 
     @property
-    def v_term(self) -> np.ndarray:
+    def v_ocv(self) -> np.ndarray:
         return self.u[0]
 
     @property
@@ -166,10 +166,12 @@ class Motors(Dynamics):
     ) -> MotorState:
         """Step motor state with battery model"""
         current_rpm = motor_state.rpm
-        motor_voltages = np.clip(
-            control_input.v_term * control_input.esc_setpoints, 0.0, self._params.v_max
-        )
-        target_rpm = motor_voltages * self._params.k_v
+        motor_voltages = control_input.v_ocv * control_input.esc_setpoints
+        # motor_voltages = np.clip(motor_voltages, 0.0, self._params.v_max)
+        eta = 0.99  # efficiency factor
+        target_rpm = (
+            motor_voltages * self._params.k_v * eta
+        )  # do a voltage compensation
 
         new_rpm = step_motor_fn(
             current_rpm, target_rpm, dt, self._tau_inv_up, self._tau_inv_down

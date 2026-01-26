@@ -1,5 +1,5 @@
 import os
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 import rerun as rr
 import rerun.blueprint as rrb
 import numpy as np
@@ -71,6 +71,7 @@ class DroneVisualizer:
                 column_shares=[2, 1],
             ),
             rrb.SelectionPanel(state="hidden"),
+            rrb.TimePanel(state="collapsed"),
         )
         rr.send_blueprint(blueprint)
 
@@ -83,10 +84,8 @@ class DroneVisualizer:
         size_of_motor = len(motor_states.rpm)
         for i in range(size_of_motor):
             rpm = motor_states.rpm[i]
-            v = motor_states.v[i]
             c = motor_states.i[i]
             rr.log(f"motors/rpm/motor_{i+1}", rr.Scalar(rpm))
-            rr.log(f"voltage/motor_{i+1}", rr.Scalar(v))
             rr.log(f"current/motor_{i+1}", rr.Scalar(c))
         rr.log("current/motor_total", rr.Scalar(np.sum(motor_states.i)))
 
@@ -94,6 +93,7 @@ class DroneVisualizer:
         rr.log("battery/soc", rr.Scalar(battery_states.soc))
         rr.log("voltage/ocv", rr.Scalar(battery_states.v_ocv))
         rr.log("voltage/term", rr.Scalar(battery_states.v_term))
+        rr.log("voltage/v_polarization", rr.Scalar(battery_states.v_polarization))
 
     def log_rigidbody_states(self, rb_states: RigidbodyState):
         """Log rigidbody states"""

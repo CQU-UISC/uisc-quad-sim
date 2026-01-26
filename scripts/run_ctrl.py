@@ -6,7 +6,7 @@ from uisc_quad_sim.dynamics.rigidbody import RigidbodyState
 from uisc_quad_sim.simulations import QuadSim, QuadParams
 from uisc_quad_sim.visualize.vis import DroneVisualizer
 from uisc_quad_sim.controller.se3 import SE3Controller
-from uisc_quad_sim.utils.quaternion import from_euler
+from uisc_quad_sim.utils.quaternion import from_euler, q_rot, q_inv
 
 logger.remove()
 logger.add(sys.stdout, level="INFO")
@@ -35,7 +35,7 @@ def main():
         "-r",
         "--radius",
         type=float,
-        default=1.0,
+        default=5.0,
         help="Radius of the circular trajectory",
     )
     parser.add_argument(
@@ -64,11 +64,12 @@ def main():
             ref_state = example_ref(quad_sim.t, r=args.radius, omega=args.omega)
             cmd = ctrl.compute_control(state, ref_state)
             quad_sim.step(cmd)
-
-            real_thrust_acc = quad_sim.rb_state.blin_acc[2] + quad_params.rigid.g
+            real_thrust_acc = quad_sim.rb_state.blin_acc + q_rot(
+                q_inv(quad_sim.rb_state.quat), np.array([0, 0, quad_params.rigid.g])
+            )
             real_angvel = quad_sim.rb_state.ang_vel
             ctbr_response = np.array(
-                [real_thrust_acc, real_angvel[0], real_angvel[1], real_angvel[2]]
+                [real_thrust_acc[2], real_angvel[0], real_angvel[1], real_angvel[2]]
             )
             quad_vis.step(quad_sim.t)
             quad_vis.log_battery_states(quad_sim.batt_state)
