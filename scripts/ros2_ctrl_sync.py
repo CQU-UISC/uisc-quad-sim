@@ -57,7 +57,7 @@ class SE3Node(Node):
             rclpy.spin_until_future_complete(self, future)
 
             if future.result() is not None:
-                result: StepSim.Response = future.result()
+                result: StepSim.Response = future.result()  # type: ignore
                 self.state = result.state
             else:
                 self.get_logger().error(
@@ -66,7 +66,7 @@ class SE3Node(Node):
                 break
 
             self.t += self.dt
-            ref_state = example_ref(self.t)
+            ref_state = example_ref(self.t, 5, 1)
 
             if self.state is None:
                 self.get_logger().warn("State is None, skipping control calculation.")

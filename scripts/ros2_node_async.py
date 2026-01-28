@@ -8,7 +8,6 @@ from rclpy.time import Time
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
 from px4ctrl_msgs.msg import State, Command
-from px4ctrl_msgs.srv import StepSim
 from uisc_quad_sim.simulations import QuadSim, QuadParams
 from uisc_quad_sim.simulations.quadrotor import ControlCommand, ControlMode
 from uisc_quad_sim.visualize.vis import DroneVisualizer
@@ -17,9 +16,8 @@ from uisc_quad_sim.visualize.vis import DroneVisualizer
 class SimNode(Node):
     def __init__(self):
         super().__init__("sim", namespace="px4ctrl")
-        self.sim_step_service = self.create_service(
-            StepSim, "step_sim", self.sim_step_callback
-        )
+
+        # Simulation Parameters
         self.sim_params = QuadParams(
             os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), "../configs/uisc_xi35.yaml"
@@ -27,25 +25,73 @@ class SimNode(Node):
         )
         self.quad_sim = QuadSim(self.sim_params)
         self.quad_vis = DroneVisualizer()
+
+        # Control mapping
         self.type_map = {
             Command.THRUST_BODYRATE: ControlMode.CTBR,
             Command.THRUST_TORQUE: ControlMode.CTBM,
             Command.ROTORS_FORCE: ControlMode.SRT,
         }
 
+        # Communication
         self.state_publisher_ = self.create_publisher(State, "~/state", 10)
         self.odom_publisher_ = self.create_publisher(Odometry, "~/odom", 10)
-        self.publish_timer_ = self.create_timer(0.01, self.timer_callback)
+        self.cmd_subscription_ = self.create_subscription(
+            Command, "~/cmd", self.cmd_callback, 10
+        )
         self.sensor_sub = self.create_subscription(
             Image, "~/depth_image", self.depth_image_callback, 10
         )
 
+        # Simulation Loop (100Hz)
+        self.sim_timer = self.create_timer(0.01, self.sim_loop_callback)
+
+        # Control State
+        self.last_cmd_time = self.get_clock().now()
+        self.current_cmd = self.get_hover_command()  # Default to hover
+        self.timeout_duration = 0.02  # 20ms (50Hz)
+
         # jit-warmup
         self.quad_sim.warm_up()
         self.quad_sim.reset()
-        self.get_logger().info("Simulation node initialized.")
+        self.get_logger().info("Simulation node initialized (Asynchronous Mode).")
 
-    def timer_callback(self):
+    def get_hover_command(self):
+        # Using CTBR mode (Collective Thrust + Body Rates)
+        u = np.array([9.81, 0.0, 0.0, 0.0])
+        return ControlCommand(type=ControlMode.CTBR, u=u)
+
+    def cmd_callback(self, msg: Command):
+        self.last_cmd_time = self.get_clock().now()
+
+        if msg.type not in self.type_map:
+            self.get_logger().error(f"Unsupported command type: {msg.type}")
+            return
+
+        self.current_cmd = ControlCommand(
+            type=self.type_map[msg.type], u=np.array(msg.u)
+        )
+
+    def sim_loop_callback(self):
+        # Check for command timeout
+        now = self.get_clock().now()
+        dt_last_cmd = (now - self.last_cmd_time).nanoseconds * 1e-9
+
+        if dt_last_cmd > self.timeout_duration:
+            # Timeout: Enter Hover mode
+            self.current_cmd = self.get_hover_command()
+
+        # Step Simulation
+        rb_state = self.quad_sim.step(self.current_cmd)
+
+        # Visualize
+        self.quad_vis.step(self.quad_sim.t)
+        self.quad_vis.log_rigidbody_states(rb_state)
+        self.quad_vis.log_battery_states(self.quad_sim.batt_state)
+        self.quad_vis.log_motor_states(self.quad_sim.motor_state)
+        self.quad_vis.log_controls(self.current_cmd.u)
+
+        # Publish Data
         self.publish_state_callback()
         self.publish_odom_callback()
 
@@ -90,28 +136,6 @@ class SimNode(Node):
         depth_image = np.frombuffer(msg.data, dtype=np.float32).reshape((height, width))
         self.quad_vis.log_depth_image(depth_image)
         return
-
-    def sim_step_callback(self, request: StepSim.Request, response: StepSim.Response):
-        command = request.command
-        response.state.header.stamp = self.get_clock().now().to_msg()
-        if not request.command_valid:
-            self.get_logger().info("Received empty command, returning current state")
-            response.state.x = self.quad_sim.rb_state.x[:13].tolist()
-            return response
-        if command.type not in self.type_map:
-            self.get_logger().error(f"Unsupported command type: {command.type}")
-            return response
-        self.get_logger().debug(f"Received command: {command.type}, u: {command.u}")
-        cmd = ControlCommand(type=self.type_map[command.type], u=np.array(command.u))
-        rb_state = self.quad_sim.step(cmd)
-        self.quad_vis.step(self.quad_sim.t)
-        self.quad_vis.log_rigidbody_states(rb_state)
-        self.quad_vis.log_battery_states(self.quad_sim.batt_state)
-        self.quad_vis.log_motor_states(self.quad_sim.motor_state)
-        self.quad_vis.log_controls(command.u)
-        self.get_logger().debug(f"Post-step state estimate: {rb_state.x[:13]}")
-        response.state.x = rb_state.x[:13].tolist()
-        return response
 
 
 if __name__ == "__main__":

@@ -19,6 +19,20 @@ class DroneVisualizer:
     def reset(self):
         """Reset the visualizer"""
         rr.init("uisc_quad_sim.render", recording_id=uuid4(), spawn=True)
+        self.set_quad_transform(
+            translation=np.zeros(3),
+            rotation_xyzw=np.array([0, 0, 0, 1]),
+        )
+        self.set_camera_transform(
+            translation=np.zeros(3),
+            rotation_xyzw=Rotation.from_euler(
+                "xyz", [np.pi / 2, np.pi, np.pi / 2]
+            ).as_quat(),
+        )
+        self.set_quad_mesh_transform(
+            translation=np.zeros(3),
+            rotation_xyzw=Rotation.from_euler("xyz", [0, 0, np.pi / 4]).as_quat(),
+        )
         if os.path.exists(self._drone_asset_path):
             rr.log(
                 "world/drone/baselink/mesh",
@@ -31,43 +45,41 @@ class DroneVisualizer:
 
     def _setup_blueprint(self):
         """Configure the visualization view layout using Rerun 0.22+ API"""
-        plot_paths = [
+        rigid_views = [
             ("Position", "/rigid/position"),
             ("Velocity", "/rigid/velocity"),
             ("Angular Velocity", "/rigid/angular_velocity"),
             ("Orientation (Euler)", "/rigid/euler"),
             ("Linear Acc", "/rigid/lin_acc"),
+        ]
+
+        quad_views = [
+            ("Controls", "/controls/"),
             ("Motor RPM", "/motors/rpm"),
             ("Battery SoC", "/battery/soc"),
             ("Voltage", "/voltage/"),
             ("Current", "/current/"),
-            ("Controls", "/controls"),
         ]
 
-        time_series_views = [
-            rrb.TimeSeriesView(origin=path, name=name) for name, path in plot_paths
+        rigid = [
+            rrb.TimeSeriesView(origin=path, name=name) for name, path in rigid_views
         ]
+
+        quad = [rrb.TimeSeriesView(origin=path, name=name) for name, path in quad_views]
 
         blueprint = rrb.Blueprint(
             rrb.Horizontal(
-                rrb.Vertical(
-                    rrb.Spatial3DView(
-                        origin="/world",
-                        name="3D View",
-                        # time_ranges=[
-                        #     rrb.VisibleTimeRange(
-                        #         "time_s",
-                        #         # start=rrb.TimeRangeBoundary.absolute(time=0.0),
-                        #         start=rrb.TimeRangeBoundary.cursor_relative(
-                        #             seconds=-15.0
-                        #         ),
-                        #         end=rrb.TimeRangeBoundary.cursor_relative(),
-                        #     )
-                        # ],
-                    ),
-                    row_shares=[3],
+                rrb.Spatial3DView(
+                    origin="/world",
+                    name="3D View",
                 ),
-                rrb.Vertical(*time_series_views),
+                rrb.Vertical(
+                    rrb.Tabs(*rigid),
+                    rrb.Tabs(*quad),
+                    rrb.Spatial2DView(
+                        origin="/world/drone/baselink/camera", name="2D View"
+                    ),
+                ),
                 column_shares=[2, 1],
             ),
             rrb.SelectionPanel(state="hidden"),
@@ -103,23 +115,8 @@ class DroneVisualizer:
         quat_wxyz = x[6:10]
         angular_vel = x[10:13]
         lin_acc = x[13:16]
-
-        rr.log(
-            "world/drone/baselink",
-            rr.Transform3D(
-                translation=position,
-                # [w, x, y, z] -> [x, y, z, w]
-                rotation=rr.Quaternion(
-                    xyzw=[quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]]
-                ),
-                axis_length=0.5,
-            ),
-        )
-
-        # rr.log(
-        #     "world/drone/position_trace",
-        #     rr.Points3D(positions=position, colors=[[0, 255, 0]], radii=0.01)
-        # )
+        quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
+        self.set_quad_transform(position, quat_xyzw)
         if hasattr(self, "_cached_traj_pos"):
             self._cached_traj_pos = np.vstack([self._cached_traj_pos, position])
             rr.log(
@@ -197,6 +194,50 @@ class DroneVisualizer:
                 rr.LineStrips3D(strips=[traj], colors=[[255, 0, 0]], radii=0.02),
             )
             self._mpc_traj_received = True
+
+    def set_quad_transform(self, translation: np.ndarray, rotation_xyzw: np.ndarray):
+        rr.log(
+            "world/drone/baselink",
+            rr.Transform3D(
+                translation=translation,
+                rotation=rr.Quaternion(xyzw=rotation_xyzw),
+                axis_length=0.5,
+            ),
+        )
+
+    def set_quad_mesh_transform(
+        self, translation: np.ndarray, rotation_xyzw: np.ndarray
+    ):
+        rr.log(
+            "world/drone/baselink/mesh",
+            rr.Transform3D(
+                translation=translation,
+                rotation=rr.Quaternion(xyzw=rotation_xyzw),
+            ),
+        )
+
+    def set_camera_transform(self, translation: np.ndarray, rotation_xyzw: np.ndarray):
+        rr.log(
+            "world/drone/baselink/camera",
+            rr.Transform3D(
+                translation=translation,
+                rotation=rr.Quaternion(xyzw=rotation_xyzw),
+            ),
+            static=True,
+        )
+
+    def log_depth_image(self, image: np.ndarray):
+        rr.log(
+            "world/drone/baselink/camera/",
+            rr.Pinhole(
+                width=160,
+                height=90,
+                focal_length=[80, 80],
+                principal_point=[80, 45],
+            ),
+            static=True,
+        )
+        rr.log("world/drone/baselink/camera/image", rr.DepthImage(image))
 
     def log_custom_msg(self, custom_callback: Callable):
         custom_callback(rr)

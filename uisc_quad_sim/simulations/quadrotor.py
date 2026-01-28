@@ -106,6 +106,10 @@ class QuadSim:
         # Initialize States
         self.reset()
 
+    def warm_up(self):
+        """Warm-up JIT-compiled functions by performing a dummy step."""
+        self.step(ControlCommand(type=ControlMode.CTBM, u=np.zeros(4)))
+
     def reset(self):
         """Reset the simulation to initial conditions."""
         self.t = 0.0
@@ -197,7 +201,7 @@ class QuadSim:
             # print("target_thrust:", target_thrust, " torque:", torque, " esc_setpoints:", esc_setpoints)
             self._low_level_step_logic(esc_setpoints)
             self.t += self._dt
-
+        self._constrain_state()
         return self._rb_state
 
     def _low_level_step_logic(self, esc_setpoints: np.ndarray):
@@ -240,3 +244,11 @@ class QuadSim:
 
         # 6. Step Rigid Body
         self._rb_dyn.step(self._dt, self._rb_state, rb_ctrl)
+
+    def _constrain_state(self):
+        """Constrain the rigid body state to valid ranges (if needed)."""
+        # current only constrains z position to be non-negative
+        if self._rb_state.pos[2] < 0.0:
+            self._rb_state.pos[2] = 0.0
+            self._rb_state.vel[2] = 0.0
+        return
