@@ -52,13 +52,17 @@ def main():
     quad_sim = QuadSim(quad_params)
     quad_vis = DroneVisualizer()
     t_end = 15
-    logger.info("Start simulation")
-    s_t = time.perf_counter()
+    logger.info("Warming up JIT...")
+    quad_sim.warm_up()
     quad_sim.reset()
     quad_sim.rb_state.x[2] = 1.0  # initial height 1m
     quad_sim.batt_state.soc = 1.0  # initial SOC 100%
+    logger.info("Starting simulation...")
+    s_t = time.perf_counter()
     ctrl = SE3Controller()
-    with tqdm(total=t_end // quad_params.high_level_dt) as pbar:
+    avg_step_time = 0.0
+    total = t_end // quad_params.high_level_dt
+    with tqdm(total=total) as pbar:
         while quad_sim.t < t_end:
             state = quad_sim.rb_state
             ref_state = example_ref(quad_sim.t, r=args.radius, omega=args.omega)
@@ -71,7 +75,10 @@ def main():
             ctbr_response = np.array(
                 [real_thrust_acc[2], real_angvel[0], real_angvel[1], real_angvel[2]]
             )
+            s = time.perf_counter()
             quad_vis.step(quad_sim.t)
+            e = time.perf_counter()
+            avg_step_time += e - s
             quad_vis.log_battery_states(quad_sim.batt_state)
             quad_vis.log_rigidbody_states(quad_sim.rb_state)
             quad_vis.log_motor_states(quad_sim.motor_state)
@@ -80,6 +87,7 @@ def main():
             pbar.update(1)
     e_t = time.perf_counter()
     logger.info(f"Simulation finished in {e_t-s_t:.2f}s")
+    logger.info(f"Average step time(ms): {avg_step_time / total * 1000:.2f}")
     return
 
 
