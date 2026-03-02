@@ -248,6 +248,19 @@ class Rigidbody(Dynamics):
         self._disturb.clear()
         self._disturb.add(AirDrag(self._params.drag_coeff))
 
+    def eval_disturbance(
+        self, state: np.ndarray, u: np.ndarray
+    ) -> (np.ndarray, np.ndarray):
+        """
+        Evaluate the disturbance force and moment for a given state and control input.
+        :param state: Current state vecto
+        :param u: Current control input vector
+        :return: Tuple of (force, moment) where force is a 3D vector and moment is a 3D vector
+        """
+        force = self._disturb.force(state, u)
+        moment = self._disturb.moment(state, u)
+        return force, moment
+
     def step(
         self, dt: float, state: RigidbodyState, control_input: RigidbodyControl
     ) -> RigidbodyState:

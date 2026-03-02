@@ -1,6 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from typing import Optional
 
 
 class ControlMode:
@@ -13,6 +14,7 @@ class ControlMode:
 class ControlCommand:
     type: int
     u: np.ndarray  # Control inputs
+    rotor_forces: Optional[np.ndarray] = None  # optional, motor thrusts
 
 
 class BaseController(ABC):

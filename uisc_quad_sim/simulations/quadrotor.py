@@ -142,6 +142,10 @@ class QuadSim:
         return self._batt_dyn
 
     @property
+    def mixer(self) -> Mixer:
+        return self._mixer
+
+    @property
     def rb_state(self) -> RigidbodyState:
         return self._rb_state
 

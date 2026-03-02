@@ -12,7 +12,7 @@ class DroneVisualizer:
     def __init__(self):
         """Initialize the drone visualizer"""
         self._drone_asset_path = os.path.join(
-            os.path.dirname(__file__), "../../assets/hummingbird.glb"
+            os.path.dirname(__file__), "../../assets/hummingbird_s.glb"
         )
         self.reset()
 
@@ -49,8 +49,10 @@ class DroneVisualizer:
             ("Position", "/rigid/position"),
             ("Velocity", "/rigid/velocity"),
             ("Angular Velocity", "/rigid/angular_velocity"),
-            ("Orientation (Euler)", "/rigid/euler"),
             ("Linear Acc", "/rigid/lin_acc"),
+            ("Forces", "/rigid/forces"),
+            ("Torques", "/rigid/torques"),
+            ("Orientation (Euler)", "/rigid/euler"),
         ]
 
         quad_views = [
@@ -137,6 +139,18 @@ class DroneVisualizer:
 
         euler = Rotation.from_quat(quat_xyzw).as_euler("xyz")
         self._log_vec3(f"rigid/euler", euler, labels=["roll", "pitch", "yaw"])
+
+    def log_disturbance(self, force: np.ndarray, torque: np.ndarray, prefix="gt"):
+        self._log_vec3(
+            f"rigid/forces",
+            force,
+            labels=[f"{prefix}_fx", f"{prefix}_fy", f"{prefix}_fz"],
+        )
+        self._log_vec3(
+            f"rigid/torques",
+            torque,
+            labels=[f"{prefix}_tx", f"{prefix}_ty", f"{prefix}_tz"],
+        )
 
     def log_controls(self, u_sp: np.ndarray, u_real: Optional[np.ndarray] = None):
         """Log control commands"""
