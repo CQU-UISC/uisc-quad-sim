@@ -10,7 +10,7 @@ dependencies = [
     "loguru>=0.7.3",
     "numpy>=2.2.6",
     "PyYAML==6.0.2",
-    "rerun-sdk==0.22.1",
+    "rerun-sdk==0.30.0",
     "matplotlib",
     "scipy",
     "tqdm",

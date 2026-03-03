@@ -85,13 +85,13 @@ class DroneVisualizer:
                 column_shares=[2, 1],
             ),
             rrb.SelectionPanel(state="hidden"),
-            rrb.TimePanel(state="collapsed"),
+            rrb.TimePanel(state="collapsed", timeline="sec"),
         )
         rr.send_blueprint(blueprint)
 
     def step(self, time_s: float):
         """Advance the visualizer by one step"""
-        rr.set_time_seconds("time_s", time_s)
+        rr.set_time("sec", duration=time_s)
 
     def log_motor_states(self, motor_states: MotorState):
         """Log motor states efficiently"""
@@ -99,15 +99,15 @@ class DroneVisualizer:
         for i in range(size_of_motor):
             rpm = motor_states.rpm[i]
             c = motor_states.i[i]
-            rr.log(f"motors/rpm/motor_{i+1}", rr.Scalar(rpm))
-            rr.log(f"current/motor_{i+1}", rr.Scalar(c))
-        rr.log("current/motor_total", rr.Scalar(np.sum(motor_states.i)))
+            rr.log(f"motors/rpm/motor_{i+1}", rr.Scalars(rpm))
+            rr.log(f"current/motor_{i+1}", rr.Scalars(c))
+        rr.log("current/motor_total", rr.Scalars(np.sum(motor_states.i)))
 
     def log_battery_states(self, battery_states: BatteryState):
-        rr.log("battery/soc", rr.Scalar(battery_states.soc))
-        rr.log("voltage/ocv", rr.Scalar(battery_states.v_ocv))
-        rr.log("voltage/term", rr.Scalar(battery_states.v_term))
-        rr.log("voltage/v_polarization", rr.Scalar(battery_states.v_polarization))
+        rr.log("battery/soc", rr.Scalars(battery_states.soc))
+        rr.log("voltage/ocv", rr.Scalars(battery_states.v_ocv))
+        rr.log("voltage/term", rr.Scalars(battery_states.v_term))
+        rr.log("voltage/v_polarization", rr.Scalars(battery_states.v_polarization))
 
     def log_rigidbody_states(self, rb_states: RigidbodyState):
         """Log rigidbody states"""
@@ -155,16 +155,16 @@ class DroneVisualizer:
     def log_controls(self, u_sp: np.ndarray, u_real: Optional[np.ndarray] = None):
         """Log control commands"""
         for i, val in enumerate(u_sp):
-            rr.log(f"controls/u_sp_{i+1}", rr.Scalar(val))
+            rr.log(f"controls/u_sp_{i+1}", rr.Scalars(val))
 
         if u_real is not None:
             for i, val in enumerate(u_real):
-                rr.log(f"controls/u_real_{i+1}", rr.Scalar(val))
+                rr.log(f"controls/u_real_{i+1}", rr.Scalars(val))
 
     def _log_vec3(self, root_path: str, vector: np.ndarray, labels=["x", "y", "z"]):
         """Helper to log vector components efficiently"""
         for i, label in enumerate(labels):
-            rr.log(f"{root_path}/{label}", rr.Scalar(vector[i]))
+            rr.log(f"{root_path}/{label}", rr.Scalars(vector[i]))
 
     def log_ref_traj(self, traj_pos: np.ndarray):
         if hasattr(self, "_cached_ref_traj_pos"):
@@ -213,9 +213,9 @@ class DroneVisualizer:
             rr.Transform3D(
                 translation=translation,
                 rotation=rr.Quaternion(xyzw=rotation_xyzw),
-                axis_length=0.5,
             ),
         )
+        rr.log("world/drone/baselink/axis", rr.TransformAxes3D(axis_length=0.4))
 
     def set_quad_mesh_transform(
         self, translation: np.ndarray, rotation_xyzw: np.ndarray
