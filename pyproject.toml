@@ -8,10 +8,10 @@ version = "0.1.0"
 dependencies = [
     "numba>=0.60.0",
     "loguru>=0.7.3",
-    "numpy>=1.26.4, <2.0.0",
+    "numpy>=2.2.6",
     "PyYAML==6.0.2",
     "rerun-sdk==0.22.1",
-    "matplotlib>=3.7.3",
+    "matplotlib",
     "scipy",
     "tqdm",
 ]
