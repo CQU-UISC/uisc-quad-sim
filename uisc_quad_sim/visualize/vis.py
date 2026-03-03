@@ -19,6 +19,7 @@ class DroneVisualizer:
     def reset(self):
         """Reset the visualizer"""
         rr.init("uisc_quad_sim.render", recording_id=uuid4(), spawn=True)
+        self.step(0)  # Ensure time starts at 0
         self._setup_blueprint()
         self.set_quad_transform(
             translation=np.zeros(3),
@@ -78,8 +79,12 @@ class DroneVisualizer:
                 rrb.Vertical(
                     rrb.Tabs(*rigid),
                     rrb.Tabs(*quad),
-                    rrb.Spatial2DView(
-                        origin="/world/drone/baselink/camera", name="2D View"
+                    rrb.Tabs(
+                        rrb.Spatial2DView(
+                            origin="/world/drone/baselink/camera", name="2D View"
+                        ),
+                        rrb.TextLogView(origin="/logs", name="Logs"),
+                        rrb.TimeSeriesView(origin="/metrics", name="Metrics"),
                     ),
                 ),
                 column_shares=[2, 1],
@@ -251,6 +256,13 @@ class DroneVisualizer:
             static=True,
         )
         rr.log("world/drone/baselink/camera/image", rr.DepthImage(image))
+
+    def log_metrics(self, metrics: dict):
+        for key, value in metrics.items():
+            rr.log(f"metrics/{key}", rr.Scalars(value))
+
+    def log_text(self, text: str, level="INFO"):
+        rr.log("logs", rr.TextLog(text, level=level))
 
     def log_custom_msg(self, custom_callback: Callable):
         custom_callback(rr)
