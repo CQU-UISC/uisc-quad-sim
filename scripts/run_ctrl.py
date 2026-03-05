@@ -70,9 +70,18 @@ def main():
             quad_sim.step(cmd)
             real_thrust_acc = quad_sim.estimator.imu_acc()
             real_angvel = quad_sim.estimator.imu_gyro()
-            ctbr_response = np.array(
-                [real_thrust_acc[2], real_angvel[0], real_angvel[1], real_angvel[2]]
-            )
+            ctbr_response = {
+                "real_t_acc": real_thrust_acc[2],
+                "real_angv_x": real_angvel[0],
+                "real_angv_y": real_angvel[1],
+                "real_angv_z": real_angvel[2],
+            }
+            ctbr_setpoint = {
+                "sp_t_acc": cmd.u[0],
+                "sp_angv_x": cmd.u[1],
+                "sp_angv_y": cmd.u[2],
+                "sp_angv_z": cmd.u[3],
+            }
             s = time.perf_counter()
             quad_vis.step(quad_sim.t)
             e = time.perf_counter()
@@ -80,7 +89,8 @@ def main():
             quad_vis.log_battery_states(quad_sim.estimator.battery())
             quad_vis.log_rigidbody_states(quad_sim.estimator.rigid())
             quad_vis.log_motor_states(quad_sim.estimator.motor())
-            quad_vis.log_controls(cmd.u, ctbr_response)
+            quad_vis.log_controls(ctbr_response)
+            quad_vis.log_controls(ctbr_setpoint)
             quad_vis.log_ref_traj(ref_state.pos)
             pbar.update(1)
     e_t = time.perf_counter()

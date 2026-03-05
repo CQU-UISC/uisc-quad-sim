@@ -157,14 +157,10 @@ class DroneVisualizer:
             labels=[f"{prefix}_tx", f"{prefix}_ty", f"{prefix}_tz"],
         )
 
-    def log_controls(self, u_sp: np.ndarray, u_real: Optional[np.ndarray] = None):
+    def log_controls(self, controls: dict):
         """Log control commands"""
-        for i, val in enumerate(u_sp):
-            rr.log(f"controls/u_sp_{i+1}", rr.Scalars(val))
-
-        if u_real is not None:
-            for i, val in enumerate(u_real):
-                rr.log(f"controls/u_real_{i+1}", rr.Scalars(val))
+        for key, value in controls.items():
+            rr.log(f"controls/{key}", rr.Scalars(value))
 
     def _log_vec3(self, root_path: str, vector: np.ndarray, labels=["x", "y", "z"]):
         """Helper to log vector components efficiently"""
