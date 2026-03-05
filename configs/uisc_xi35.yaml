@@ -51,9 +51,14 @@ rigid_body:
     drag_coeff: [0.0, 0.0, 0.0] # N/(m/s) [0.2, 0.2, 0.4]
 
 estimator:
-    position_std: 0.02 # m
-    velocity_std: 0.02 # m/s
-    attitude_std: 0.01 # unitless quaternion
-    ang_velocity_std: 0.01 # rad/s
-    lin_acc_std: 0.01 # m/s^2
-    ang_acc_std: 0.01 # rad/s^2
+    ground_truth: true # whether to use ground truth state as estimator output (for testing purposes)
+    position_std: [0.0, 0.0, 0.0] # Standard deviation for position measurements (m)
+    velocity_std: [0.0, 0.0, 0.0] # Standard deviation for velocity measurements (m/s)
+    attitude_std: [0.0, 0.0, 0.0, 0.0] # Standard deviation for attitude measurements (unitless quaternion)
+    ang_velocity_std: [0.0, 0.0, 0.0] # Standard deviation for angular velocity measurements (rad/s)
+    lin_acc_std: [0.0, 0.0, 0.0] # Standard deviation for linear acceleration measurements (m/s^2)
+    ang_acc_std: [0.0, 0.0, 0.0] # Standard deviation for angular acceleration measurements (rad/s^2)
+    imu_acc_std: [0.0, 0.0, 0.0] # Standard deviation for IMU acceleration measurements (m/s^2)
+    imu_acc_bias: [0.0, 0.0, 0.0] # Initial bias for IMU acceleration (m/s^2)
+    imu_gyro_std: [0.0, 0.0, 0.0] # Standard deviation for IMU gyroscope measurements (rad/s)
+    imu_gyro_bias: [0.0, 0.0, 0.0] # Initial bias for IMU gyroscope (rad/s)

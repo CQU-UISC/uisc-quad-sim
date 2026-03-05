@@ -64,14 +64,12 @@ def main():
     total = t_end // quad_params.high_level_dt
     with tqdm(total=total) as pbar:
         while quad_sim.t < t_end:
-            state = quad_sim.rb_state
+            state = quad_sim.estimator.rigid()
             ref_state = example_ref(quad_sim.t, r=args.radius, omega=args.omega)
             cmd = ctrl.compute_control(state, ref_state)
             quad_sim.step(cmd)
-            real_thrust_acc = quad_sim.rb_state.blin_acc + q_rot(
-                q_inv(quad_sim.rb_state.quat), np.array([0, 0, quad_params.rigid.g])
-            )
-            real_angvel = quad_sim.rb_state.ang_vel
+            real_thrust_acc = quad_sim.estimator.imu_acc()
+            real_angvel = quad_sim.estimator.imu_gyro()
             ctbr_response = np.array(
                 [real_thrust_acc[2], real_angvel[0], real_angvel[1], real_angvel[2]]
             )
@@ -79,9 +77,9 @@ def main():
             quad_vis.step(quad_sim.t)
             e = time.perf_counter()
             avg_step_time += e - s
-            quad_vis.log_battery_states(quad_sim.batt_state)
-            quad_vis.log_rigidbody_states(quad_sim.rb_state)
-            quad_vis.log_motor_states(quad_sim.motor_state)
+            quad_vis.log_battery_states(quad_sim.estimator.battery())
+            quad_vis.log_rigidbody_states(quad_sim.estimator.rigid())
+            quad_vis.log_motor_states(quad_sim.estimator.motor())
             quad_vis.log_controls(cmd.u, ctbr_response)
             quad_vis.log_ref_traj(ref_state.pos)
             pbar.update(1)

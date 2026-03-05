@@ -1,13 +1,19 @@
 import numpy as np
 import yaml
 
-from .llc import LowLevelSimpleController, LLCParams
-from .mixer import Mixer, MixerParams
-from ..controller import ControlCommand, ControlMode
-from ..dynamics import Rigidbody, RigidbodyParams, RigidbodyState, RigidbodyControl
-from ..dynamics import Motors, MotorParams, MotorState, MotorControl
-from ..dynamics import Battery, BatteryParams, BatteryState, BatteryControl
-from ..dynamics.disturbance import Disturbance
+from uisc_quad_sim.simulations.llc import LowLevelSimpleController, LLCParams
+from uisc_quad_sim.simulations.mixer import Mixer, MixerParams
+from uisc_quad_sim.simulations.estimator import Estimator, EstimatorParams
+from uisc_quad_sim.controller import ControlCommand, ControlMode
+from uisc_quad_sim.dynamics import (
+    Rigidbody,
+    RigidbodyParams,
+    RigidbodyState,
+    RigidbodyControl,
+)
+from uisc_quad_sim.dynamics import Motors, MotorParams, MotorState, MotorControl
+from uisc_quad_sim.dynamics import Battery, BatteryParams, BatteryState, BatteryControl
+from uisc_quad_sim.dynamics.disturbance import Disturbance
 
 
 class QuadParams:
@@ -84,6 +90,22 @@ class QuadParams:
             inertia=np.array(ctrl_cfg["inertia"]), kp=np.array(ctrl_cfg["kp"])
         )
 
+        # 5. Estimator Params
+        est_cfg = cfg["estimator"]
+        self.estimator = EstimatorParams(
+            ground_truth=est_cfg["ground_truth"],
+            position_std=np.array(est_cfg["position_std"]),
+            velocity_std=np.array(est_cfg["velocity_std"]),
+            attitude_std=np.array(est_cfg["attitude_std"]),
+            ang_velocity_std=np.array(est_cfg["ang_velocity_std"]),
+            lin_acc_std=np.array(est_cfg["lin_acc_std"]),
+            ang_acc_std=np.array(est_cfg["ang_acc_std"]),
+            imu_acc_std=np.array(est_cfg["imu_acc_std"]),
+            imu_acc_bias=np.array(est_cfg["imu_acc_bias"]),
+            imu_gyro_std=np.array(est_cfg["imu_gyro_std"]),
+            imu_gyro_bias=np.array(est_cfg["imu_gyro_bias"]),
+        )
+
 
 class QuadSim:
     """
@@ -102,6 +124,7 @@ class QuadSim:
         self._batt_dyn = Battery(params.battery)
         self._mixer = Mixer(params.mixer)
         self._llc = LowLevelSimpleController(params.llc)
+        self._estimator = Estimator(params.estimator)
 
         # Initialize States
         self.reset()
@@ -116,7 +139,7 @@ class QuadSim:
         self._rb_state = self._rb_dyn.initialize()
         self._motor_state = self._motor_dyn.initialize()
         self._batt_state = self._batt_dyn.initialize()
-
+        self._estimator.initialize(self._rb_state, self._motor_state, self._batt_state)
         # Reset disturbance to default (usually just AirDrag)
         self._rb_dyn.reset_disturbance()
 
@@ -156,6 +179,10 @@ class QuadSim:
     @property
     def batt_state(self) -> BatteryState:
         return self._batt_state
+
+    @property
+    def estimator(self) -> Estimator:
+        return self._estimator
 
     @property
     def time(self) -> float:

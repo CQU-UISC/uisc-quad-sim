@@ -1,3 +1,4 @@
+from typing import Tuple
 import numba as nb
 import numpy as np
 from dataclasses import dataclass
@@ -250,10 +251,10 @@ class Rigidbody(Dynamics):
 
     def eval_disturbance(
         self, state: np.ndarray, u: np.ndarray
-    ) -> (np.ndarray, np.ndarray):
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Evaluate the disturbance force and moment for a given state and control input.
-        :param state: Current state vecto
+        :param state: Current state vector
         :param u: Current control input vector
         :return: Tuple of (force, moment) where force is a 3D vector and moment is a 3D vector
         """
