@@ -1,5 +1,5 @@
 import os
-from typing import Callable, Optional, List
+from typing import Callable, Literal, Optional, List
 import rerun as rr
 import rerun.blueprint as rrb
 import numpy as np
@@ -11,12 +11,15 @@ from ..dynamics import MotorState, RigidbodyState, BatteryState
 class DroneVisualizer:
     def __init__(self):
         """Initialize the drone visualizer"""
+        base_dir = os.path.dirname(__file__)
         self._drone_asset_path = os.path.join(
-            os.path.dirname(__file__), "../../assets/hummingbird_s.glb"
+            base_dir, "../../assets/hummingbird_s.glb"
         )
-        self._gate_asset_path = os.path.join(
-            os.path.dirname(__file__), "../../assets/gate.glb"
-        )
+        self._gate_assets_path = {
+            "l": os.path.join(base_dir, "../../assets/gate_l.glb"),  # size 2x2m
+            "m": os.path.join(base_dir, "../../assets/gate_m.glb"),  # size 1x1m
+            "s": os.path.join(base_dir, "../../assets/gate_s.glb"),  # size 0.5x0.5m
+        }
         self.reset()
 
     def reset(self):
@@ -53,10 +56,12 @@ class DroneVisualizer:
             raise FileNotFoundError(
                 f"Drone asset not found at {self._drone_asset_path}"
             )
-        if os.path.exists(self._gate_asset_path):
-            self._gate_assets = rr.Asset3D(path=self._gate_asset_path)
-        else:
-            raise FileNotFoundError(f"Gate asset not found at {self._gate_asset_path}")
+        self._gate_assets = {}
+        for size, path in self._gate_assets_path.items():
+            if os.path.exists(path):
+                self._gate_assets[size] = rr.Asset3D(path=path)
+            else:
+                raise FileNotFoundError(f"Gate asset not found at {path}")
 
     def _setup_blueprint(self):
         """Configure the visualization view layout using Rerun 0.22+ API"""
@@ -254,8 +259,15 @@ class DroneVisualizer:
         )
 
     def set_gate_transform(
-        self, gate_id: str, translation: np.ndarray, rotation_wxyz: np.ndarray
+        self,
+        gate_id: str,
+        translation: np.ndarray,
+        rotation_wxyz: np.ndarray,
+        gate_size: Literal["l", "m", "s"] = "s",
     ):
+        offset = (
+            -1.0
+        )  # m, adjust the gate mesh to be centered at the middle of the gate instead of the bottom
         rr.log(
             f"world/gate_{gate_id}",
             rr.Transform3D(
@@ -277,10 +289,12 @@ class DroneVisualizer:
         )
         rr.log(
             f"world/gate_{gate_id}/mesh",
-            rr.Transform3D(translation=[0, 0, -1]),
+            rr.Transform3D(translation=[0, 0, offset]),
             static=True,
         )
-        rr.log(f"world/gate_{gate_id}/mesh/stl", self._gate_assets, static=True)
+        rr.log(
+            f"world/gate_{gate_id}/mesh/stl", self._gate_assets[gate_size], static=True
+        )
 
     def log_depth_image(self, image: np.ndarray):
         rr.log(
