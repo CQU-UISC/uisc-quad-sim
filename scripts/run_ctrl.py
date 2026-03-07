@@ -62,6 +62,12 @@ def main():
     ctrl = SE3Controller()
     avg_step_time = 0.0
     total = t_end // quad_params.high_level_dt
+    quad_vis.set_gate_transform(
+        "1", np.array([args.radius, 0.0, 1.0]), from_euler(0, 0, np.pi / 2)
+    )
+    quad_vis.set_gate_transform(
+        "2", np.array([-args.radius, 0.0, 1.0]), from_euler(0, 0, np.pi / 2)
+    )
     with tqdm(total=total) as pbar:
         while quad_sim.t < t_end:
             state = quad_sim.estimator.rigid()

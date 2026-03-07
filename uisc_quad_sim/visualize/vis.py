@@ -14,6 +14,9 @@ class DroneVisualizer:
         self._drone_asset_path = os.path.join(
             os.path.dirname(__file__), "../../assets/hummingbird_s.glb"
         )
+        self._gate_asset_path = os.path.join(
+            os.path.dirname(__file__), "../../assets/gate.glb"
+        )
         self.reset()
 
     def reset(self):
@@ -35,6 +38,11 @@ class DroneVisualizer:
             translation=np.zeros(3),
             rotation_xyzw=Rotation.from_euler("xyz", [0, 0, np.pi / 4]).as_quat(),
         )
+        rr.log(
+            "world/drone/baselink/axis",
+            rr.TransformAxes3D(axis_length=0.4),
+            static=True,
+        )
         if os.path.exists(self._drone_asset_path):
             rr.log(
                 "world/drone/baselink/mesh/stl",
@@ -42,7 +50,13 @@ class DroneVisualizer:
                 static=True,
             )
         else:
-            print(f"Warning: Asset not found at {self._drone_asset_path}")
+            raise FileNotFoundError(
+                f"Drone asset not found at {self._drone_asset_path}"
+            )
+        if os.path.exists(self._gate_asset_path):
+            self._gate_assets = rr.Asset3D(path=self._gate_asset_path)
+        else:
+            raise FileNotFoundError(f"Gate asset not found at {self._gate_asset_path}")
 
     def _setup_blueprint(self):
         """Configure the visualization view layout using Rerun 0.22+ API"""
@@ -216,7 +230,6 @@ class DroneVisualizer:
                 rotation=rr.Quaternion(xyzw=rotation_xyzw),
             ),
         )
-        rr.log("world/drone/baselink/axis", rr.TransformAxes3D(axis_length=0.4))
 
     def set_quad_mesh_transform(
         self, translation: np.ndarray, rotation_xyzw: np.ndarray
@@ -239,6 +252,35 @@ class DroneVisualizer:
             ),
             static=True,
         )
+
+    def set_gate_transform(
+        self, gate_id: str, translation: np.ndarray, rotation_wxyz: np.ndarray
+    ):
+        rr.log(
+            f"world/gate_{gate_id}",
+            rr.Transform3D(
+                translation=translation,
+                rotation=rr.Quaternion(
+                    xyzw=[
+                        rotation_wxyz[1],
+                        rotation_wxyz[2],
+                        rotation_wxyz[3],
+                        rotation_wxyz[0],
+                    ]
+                ),
+            ),
+        )
+        rr.log(
+            f"world/gate_{gate_id}/axis",
+            rr.TransformAxes3D(axis_length=0.5),
+            static=True,
+        )
+        rr.log(
+            f"world/gate_{gate_id}/mesh",
+            rr.Transform3D(translation=[0, 0, -1]),
+            static=True,
+        )
+        rr.log(f"world/gate_{gate_id}/mesh/stl", self._gate_assets, static=True)
 
     def log_depth_image(self, image: np.ndarray):
         rr.log(
