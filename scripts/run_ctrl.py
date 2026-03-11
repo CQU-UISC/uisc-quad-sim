@@ -63,10 +63,10 @@ def main():
     avg_step_time = 0.0
     total = t_end // quad_params.high_level_dt
     quad_vis.set_gate_transform(
-        "1", np.array([args.radius, 0.0, 1.0]), from_euler(0, 0, np.pi / 2), "m"
+        "1", np.array([args.radius, 0.0, 1.0]), from_euler(0, 0, -np.pi / 2), "l"
     )
     quad_vis.set_gate_transform(
-        "2", np.array([-args.radius, 0.0, 1.0]), from_euler(0, 0, np.pi / 2), "m"
+        "2", np.array([-args.radius, 0.0, 1.0]), from_euler(0, 0, np.pi / 2), "l"
     )
     with tqdm(total=total) as pbar:
         while quad_sim.t < t_end:
