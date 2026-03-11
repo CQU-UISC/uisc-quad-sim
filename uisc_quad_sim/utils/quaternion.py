@@ -1,5 +1,6 @@
 import numpy as np
 import numba
+from scipy.spatial.transform import Rotation as R
 
 
 @numba.njit()
@@ -42,8 +43,6 @@ def q_mat(q):
 
 def mat_q(rot):
     # Stable implementation of quaternion from rotation matrix
-    from scipy.spatial.transform import Rotation as R
-
     r = R.from_matrix(rot)
     quat = r.as_quat()  # x,y,z,w
     return np.array([quat[3], quat[0], quat[1], quat[2]])
@@ -59,6 +58,17 @@ def mat_q(rot):
     y = (r13 - r31) * s
     z = (r21 - r12) * s
     return np.array([w, x, y, z])
+
+
+def from_euler(roll, pitch, yaw):
+    r = R.from_euler("xyz", [roll, pitch, yaw])
+    quat = r.as_quat()  # x,y,z,w
+    return np.array([quat[3], quat[0], quat[1], quat[2]])
+
+
+def to_euler(q):
+    r = R.from_quat([q[1], q[2], q[3], q[0]])
+    return r.as_euler("xyz")  # roll, pitch, yaw
 
 
 if __name__ == "__main__":

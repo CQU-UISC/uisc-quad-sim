@@ -3,41 +3,52 @@ import numpy as np
 import numba as nb
 
 
-@nb.jit
-def velocity(pos, w_pos, w_dir, radius, coneslope, vmax, decay_lat, decay_long):
+@nb.njit
+def wind_velocity_field(
+    pos, w_pos, w_dir, radius, coneslope, vmax, decay_lat, decay_long
+):
     """
-    The fan velocity is radially symmetric around the fan,
-    has a maximum of vmax and decays exponentially in two directions:
-      perpendicular to the fan direction and
-      parallel to the fan direction
+    Calculates the wind velocity vector at a specific position.
 
-    decay_lat controls how fast it decays perpendicularly
-      if set to 0, results in an infinitely large wall of wind
-    decay_long for parallel
-      if set to 0, results in an infinitely long cone of wind
+    Args:
+        pos (np.ndarray): Target position [x, y, z], shape (3,)
+        w_pos (np.ndarray): Wind source position, shape (3,)
+        w_dir (np.ndarray): Wind direction (normalized), shape (3,)
+        radius (float): Radius of the wind column at the source
+        coneslope (float): Slope of the wind cone expansion
+        vmax (float): Maximum wind velocity
+        decay_lat (float): Lateral decay rate
+        decay_long (float): Longitudinal decay rate
 
-    radius denotes a disk perpendicular to the direction over which there is no decay
-
-    Ideally decay_lat is large and > decay_long, to get a sharp cutoff at the fan edge (edge of disk)
-
-    dispangle controls at what angle the radius grows, i.e. simulates wind field dispersion
-    if set to 0, wind beam will not expand
-
-    Ideally, this can be made more physically correct by solving some boundary value diff eq.
+    Returns:
+        np.ndarray: Wind velocity vector at pos, shape (3,)
     """
-    dist = pos - w_pos  # N*3
-    r_para = np.dot(dist, w_dir)  # N
+    # Vector from source to target
+    dist = pos - w_pos
 
-    # if r_para < 0:
-    # return 0
-    r_para = np.maximum(0, r_para)
+    # Project distance onto the wind direction (longitudinal distance)
+    r_para = np.dot(dist, w_dir)
 
-    r_perp = np.linalg.norm(np.cross(dist, w_dir))
+    # If the target is behind the wind source, there is no wind
+    if r_para < 0:
+        return np.zeros(3)
 
+    # Calculate perpendicular distance to the wind axis
+    # Cross product magnitude gives the area of the parallelogram, divided by norm(w_dir)=1 gives height
+    r_perp_vec = np.cross(dist, w_dir)
+    r_perp = np.linalg.norm(r_perp_vec)
+
+    # Calculate effective radius at this longitudinal distance
     r_eff = radius + coneslope * r_para
-    r_perp = np.maximum(0, r_perp - r_eff)
 
-    return vmax * np.exp(-decay_lat * r_perp) * np.exp(-decay_long * r_para)
+    # Calculate distance outside the effective radius (0 if inside)
+    r_perp_excess = max(0.0, r_perp - r_eff)
+
+    # Calculate magnitude using exponential decay
+    # Decay laterally based on excess distance, longitudinally based on distance from source
+    magnitude = vmax * np.exp(-decay_lat * r_perp_excess) * np.exp(-decay_long * r_para)
+
+    return magnitude * w_dir
 
 
 class Disturbance:
@@ -49,7 +60,7 @@ class Disturbance:
     def moment(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "Base Disturbance"
 
     def field(self, box=(5, 5, 3), n=(12, 12, 6)) -> np.ndarray:
@@ -69,19 +80,19 @@ class Disturbance:
                 for k in range(nz):
                     pos = np.array([(x[i, j, k], y[i, j, k], z[i, j, k])])
                     output[i, j, k] = self.force(pos.T, np.zeros((3, 1))).T
-        return (x, y, z, output[:, :, :, 0], output[:, :, :, 1], output[:, :, :, 2])
+        return np.array(
+            (x, y, z, output[:, :, :, 0], output[:, :, :, 1], output[:, :, :, 2])
+        )
 
 
 class EmptyField(Disturbance):
     name = "D_EMPTY"
 
     def force(self, x, u):
-        N = x.shape[1]
-        return np.zeros((3, N))
+        return np.zeros((3))
 
     def moment(self, x, u):
-        N = x.shape[1]
-        return np.zeros((3, N))
+        return np.zeros((3))
 
     def __str__(self):
         return "Empty Field"
@@ -90,15 +101,15 @@ class EmptyField(Disturbance):
 class AirDrag(Disturbance):
     name = "D_AIR_DRAG"
 
-    def __init__(self, drag_coeff=0.1):
+    def __init__(self, drag_coeff: np.ndarray):
         self.drag_coeff = drag_coeff
 
     def force(self, x, u):
-        v = x[3:6, :]  # Velocity components
-        return -self.drag_coeff[:, None] * v
+        v = x[3:6]  # Velocity components
+        return -self.drag_coeff * v
 
     def moment(self, x, u):
-        return np.zeros((3, x.shape[1]))
+        return np.zeros((3))
 
     def __str__(self):
         return f"Air Drag Field with coefficient {self.drag_coeff}"
@@ -113,10 +124,10 @@ class ConstField(Disturbance):
         self.moment_val = moment
 
     def force(self, x, u):
-        return np.tile(self.force_val, (x.shape[1], 1)).T
+        return self.force_val
 
     def moment(self, x, u):
-        return np.tile(self.moment_val, (x.shape[1], 1)).T
+        return self.moment_val
 
     def __str__(self):
         return f"Const Field: {self.force_val}, {self.moment_val}"
@@ -136,12 +147,12 @@ class TimeVarField(Disturbance):
     def force(self, x, u):
         force_val = np.sin(self.tf) * self.force_val
         self.tf += self.dt
-        return np.tile(force_val, (x.shape[1], 1)).T
+        return force_val
 
     def moment(self, x, u):
         moment_val = np.cos(self.tm) * self.moment_val
         self.tm += self.dt
-        return np.tile(moment_val, (x.shape[1], 1)).T
+        return moment_val
 
     def __str__(self):
         return f"TimeVar Field: {self.force_val}, {self.moment_val}"
@@ -163,13 +174,13 @@ class TimeVarConstField(Disturbance):
         scale = np.clip(self.tf / self.T, 0, 1)  # Ensure scale is between 0 and 1
         force_val = scale * self.force_val
         self.tf += self.dt
-        return np.tile(force_val, (x.shape[1], 1)).T
+        return force_val
 
     def moment(self, x, u):
         scale = np.clip(self.tm / self.T, 0, 1)  # Ensure scale is between 0 and 1
         moment_val = scale * self.moment_val
         self.tm += self.dt
-        return np.tile(moment_val, (x.shape[1], 1)).T
+        return moment_val
 
     def __str__(self):
         return f"TimeVarConst Field: {self.force_val}, {self.moment_val}"
@@ -189,21 +200,47 @@ class WindField(Disturbance):
         decay_long=0.6,
         dispangle=15,
     ):
-        self.vmax = vmax
-        self.noisevar = noisevar
-        self.pos = pos
-        self.dir = (to - pos) / np.linalg.norm(to - pos)
+        """
+        Initialize the Wind Field disturbance.
+
+        Args:
+            pos (np.ndarray): Origin of the wind source.
+            to (np.ndarray): Target point to define wind direction.
+            vmax (float): Maximum velocity of the wind.
+            radius (float): Radius of the non-decaying wind core.
+            noisevar (float): Variance of the noise added to the wind force.
+            decay_lat (float): Coefficient for lateral decay.
+            decay_long (float): Coefficient for longitudinal decay.
+            dispangle (float): Dispersion angle of the wind cone in degrees.
+        """
+        self.pos = np.array(pos, dtype=np.float64)
+        direction = np.array(to, dtype=np.float64) - self.pos
+        self.dir = direction / np.linalg.norm(direction)
+
         self.vmax = vmax
         self.radius = radius
+        self.noisevar = noisevar
         self.decay_lat = decay_lat
         self.decay_long = decay_long
         self.coneslope = np.tan(np.radians(dispangle))
 
-    def force(self, x, u):
-        # shape of x is [13,N]
-        pos = x[0:3].T  # N*3
-        windvel = velocity(
-            pos,
+    def force(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
+        """
+        Calculate the external force exerted by the wind on the rigid body.
+
+        Args:
+            x (np.ndarray): State vector, shape (19,). x[0:3] is position.
+            u (np.ndarray): Control input (unused here).
+
+        Returns:
+            np.ndarray: Force vector in inertial frame, shape (3,)
+        """
+        # Extract position from state (assuming x[0:3] is position)
+        current_pos = x[0:3]
+
+        # Calculate deterministic wind velocity field using JIT function
+        wind_vel = wind_velocity_field(
+            current_pos,
             self.pos,
             self.dir,
             self.radius,
@@ -211,28 +248,46 @@ class WindField(Disturbance):
             self.vmax,
             self.decay_lat,
             self.decay_long,
-        )[:, None] * np.tile(self.dir, (pos.shape[0], 1))
-        noise_scale = np.linalg.norm(windvel) / self.vmax
-        f = 0.5 * windvel + self.noisevar * noise_scale * np.random.normal(size=3)
-        # return should be 3*N
-        return f.T
+        )
 
-    def moment(self, x, u):
-        return np.zeros((3, x.shape[1]))
+        # Calculate noise scale relative to current wind intensity
+        # If wind_vel is small, noise should also be small
+        wind_speed = np.linalg.norm(wind_vel)
+        if wind_speed > 1e-6:
+            noise_scale = wind_speed / self.vmax
+        else:
+            noise_scale = 0.0
+
+        # Generate random noise (Gaussian)
+        # Note: np.random is not JIT-compiled here, which is fine for the python class
+        noise = self.noisevar * noise_scale * np.random.normal(size=3)
+
+        # Resulting force (Assuming a simplified drag model: F ~ constant * v_wind)
+        # Your previous code used 0.5 factor, the reference used 0.2.
+        # Kept 0.5 to match your original logic.
+        f = 0.5 * wind_vel + noise
+
+        return f
+
+    def moment(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
+        """
+        Calculate the external moment (assumed zero for simple wind model).
+        """
+        return np.zeros(3)
 
     def __str__(self):
         return f"""Wind Field:
-    pos:{self.pos}
-    dir:{self.dir}
-    vmax:{self.vmax}
-    radius:{self.radius}
-    noisevar:{self.noisevar}
-    decay_lat:{self.decay_lat}
-    decay_long:{self.decay_long}
-    coneslope:{self.coneslope}"""
+    pos: {self.pos}
+    dir: {self.dir}
+    vmax: {self.vmax}
+    radius: {self.radius}
+    noisevar: {self.noisevar}
+    decay_lat: {self.decay_lat}
+    decay_long: {self.decay_long}
+    coneslope: {self.coneslope}"""
 
 
-class CompositeFiled(Disturbance):
+class CompositeField(Disturbance):
     name = "D_COMPOSITE"
 
     def __init__(self, *disturbances: Disturbance):
@@ -254,13 +309,13 @@ class CompositeFiled(Disturbance):
         return len(self.disturbances)
 
     def force(self, x, u):
-        f = np.zeros((3, x.shape[1]))
+        f = np.zeros(3)
         for d in self.disturbances:
             f += d.force(x, u)
         return f
 
     def moment(self, x, u):
-        m = np.zeros((3, x.shape[1]))
+        m = np.zeros(3)
         for d in self.disturbances:
             m += d.moment(x, u)
         return m

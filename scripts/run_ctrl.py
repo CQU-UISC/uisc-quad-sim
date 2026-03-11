@@ -1,58 +1,107 @@
-import os, sys, time
+import os, sys, time, argparse
 import numpy as np
 from tqdm import tqdm
 from loguru import logger
-from uisc_quad_sim.simulations import QuadSim, QuadSimParams
-from uisc_quad_sim.simulations.quadrotor_sim import ControlCommand, ControlMode
+from uisc_quad_sim.dynamics.rigidbody import RigidbodyState
+from uisc_quad_sim.simulations import QuadSim, QuadParams
 from uisc_quad_sim.visualize.vis import DroneVisualizer
 from uisc_quad_sim.controller.se3 import SE3Controller
+from uisc_quad_sim.utils.quaternion import from_euler, q_rot, q_inv
 
 logger.remove()
 logger.add(sys.stdout, level="INFO")
 
-# Input:
-# x: state estimation 13x1
-# x_d: desired state 7x1[px, py, pz, vx, vy, vz, yaw]
-# Output: u: control input
 
-
-def example_ref(t, r=5.0, omega=1.0):
-    p = np.array([r * np.sin(omega * t), r * np.cos(omega * t), 1])
-    v = np.array([r * omega * np.cos(omega * t), -r * omega * np.sin(omega * t), 0])
-    yaw = t
-    return np.concatenate([p, v, [yaw]])
+def example_ref(t, r, omega) -> RigidbodyState:
+    x = np.zeros(RigidbodyState.shape)
+    rg_state = RigidbodyState(x=x)
+    rg_state.pos = np.array([r * np.sin(omega * t), r * np.cos(omega * t), 1])
+    rg_state.vel = np.array(
+        [r * omega * np.cos(omega * t), -r * omega * np.sin(omega * t), 0]
+    )
+    rg_state.lin_acc = np.array(
+        [-r * omega**2 * np.sin(omega * t), -r * omega**2 * np.cos(omega * t), 0]
+    )
+    # let head to the center(0,0)
+    yaw = np.arctan2(-rg_state.pos[1], -rg_state.pos[0])
+    rg_state.quat = from_euler(0, 0, yaw)
+    return rg_state
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default="uisc_xi35.yaml")
+    parser.add_argument(
+        "-r",
+        "--radius",
+        type=float,
+        default=5.0,
+        help="Radius of the circular trajectory",
+    )
+    parser.add_argument(
+        "-o",
+        "--omega",
+        type=float,
+        default=1.0,
+        help="Angular speed of the circular trajectory",
+    )
+    args = parser.parse_args()
+
     dir_path = os.path.dirname(os.path.abspath(__file__))
-    quad_params = QuadSimParams.load(os.path.join(dir_path, "../configs/ctbr.yaml"))
+    quad_params = QuadParams(os.path.join(dir_path, f"../configs/{args.config}"))
     quad_sim = QuadSim(quad_params)
     quad_vis = DroneVisualizer()
     t_end = 15
-    logger.info("Start simulation")
+    logger.info("Warming up JIT...")
+    quad_sim.warm_up()
+    quad_sim.reset()
+    quad_sim.rb_state.x[2] = 1.0  # initial height 1m
+    quad_sim.batt_state.soc = 1.0  # initial SOC 100%
+    logger.info("Starting simulation...")
     s_t = time.perf_counter()
-    quad_sim.reset_pos(example_ref(0)[:3])
-    ctrl = SE3Controller(SE3Controller.M_PV)
-    with tqdm(total=t_end // quad_params.dt) as pbar:
+    ctrl = SE3Controller()
+    avg_step_time = 0.0
+    total = t_end // quad_params.high_level_dt
+    quad_vis.set_gate_transform(
+        "1", np.array([args.radius, 0.0, 1.0]), from_euler(0, 0, -np.pi / 2), "l"
+    )
+    quad_vis.set_gate_transform(
+        "2", np.array([-args.radius, 0.0, 1.0]), from_euler(0, 0, np.pi / 2), "l"
+    )
+    with tqdm(total=total) as pbar:
         while quad_sim.t < t_end:
-            x = quad_sim.estimate()
-            x_gt = quad_sim.estimate(gt=True)
-            x_ref = example_ref(quad_sim.t)
-            ctbr = ctrl.compute_control(x, x_ref)
-            thrust = quad_sim._quad.thrustMap(quad_sim._motors_omega)  # 4xN
-            real_thrust_acc = np.sum(thrust) / quad_sim._quad.mass
-            real_angvel = x_gt[10:13]
-            control_state = np.array(
-                [real_thrust_acc, real_angvel[0], real_angvel[1], real_angvel[2]]
-            )
-            quad_vis.log_state(
-                quad_sim.t, x_gt, quad_sim.motor_speed, ctbr, control_state
-            )
-            cmd = ControlCommand(ControlMode.CTBR, ctbr)
+            state = quad_sim.estimator.rigid()
+            ref_state = example_ref(quad_sim.t, r=args.radius, omega=args.omega)
+            cmd = ctrl.compute_control(state, ref_state)
             quad_sim.step(cmd)
+            real_thrust_acc = quad_sim.estimator.imu_acc()
+            real_angvel = quad_sim.estimator.imu_gyro()
+            ctbr_response = {
+                "real_t_acc": real_thrust_acc[2],
+                "real_angv_x": real_angvel[0],
+                "real_angv_y": real_angvel[1],
+                "real_angv_z": real_angvel[2],
+            }
+            ctbr_setpoint = {
+                "sp_t_acc": cmd.u[0],
+                "sp_angv_x": cmd.u[1],
+                "sp_angv_y": cmd.u[2],
+                "sp_angv_z": cmd.u[3],
+            }
+            s = time.perf_counter()
+            quad_vis.step(quad_sim.t)
+            e = time.perf_counter()
+            avg_step_time += e - s
+            quad_vis.log_battery_states(quad_sim.estimator.battery())
+            quad_vis.log_rigidbody_states(quad_sim.estimator.rigid())
+            quad_vis.log_motor_states(quad_sim.estimator.motor())
+            quad_vis.log_controls(ctbr_response)
+            quad_vis.log_controls(ctbr_setpoint)
+            quad_vis.log_ref_traj(ref_state.pos)
             pbar.update(1)
     e_t = time.perf_counter()
     logger.info(f"Simulation finished in {e_t-s_t:.2f}s")
+    logger.info(f"Average step time(ms): {avg_step_time / total * 1000:.2f}")
     return
 
 
