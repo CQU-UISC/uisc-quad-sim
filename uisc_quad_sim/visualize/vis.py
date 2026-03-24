@@ -12,6 +12,9 @@ class DroneVisualizer:
     def __init__(self):
         """Initialize the drone visualizer"""
         base_dir = os.path.dirname(__file__)
+        self._velocity_vec_max_len_m = 1.0
+        self._velocity_vec_max_speed_mps = 25.0
+        self._velocity_vec_color = np.array([[255, 140, 0]], dtype=np.uint8)
         self._drone_asset_path = os.path.join(
             base_dir, "../../assets/hummingbird_s.glb"
         )
@@ -94,6 +97,9 @@ class DroneVisualizer:
                 rrb.Spatial3DView(
                     origin="/world",
                     name="3D View",
+                    eye_controls=rrb.EyeControls3D(
+                        tracking_entity="/world/drone/baselink/mesh/stl",  # Automatically follow the drone
+                    ),
                 ),
                 rrb.Vertical(
                     rrb.Tabs(*rigid),
@@ -143,6 +149,7 @@ class DroneVisualizer:
         lin_acc = x[13:16]
         quat_xyzw = np.array([quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]])
         self.set_quad_transform(position, quat_xyzw)
+        self._log_velocity_vector(position, velocity)
         if hasattr(self, "_cached_traj_pos"):
             self._cached_traj_pos = np.vstack([self._cached_traj_pos, position])
             rr.log(
@@ -185,6 +192,32 @@ class DroneVisualizer:
         """Helper to log vector components efficiently"""
         for i, label in enumerate(labels):
             rr.log(f"{root_path}/{label}", rr.Scalars(vector[i]))
+
+    def _log_velocity_vector(self, position: np.ndarray, velocity: np.ndarray):
+        speed_mps = float(np.linalg.norm(velocity))
+        if speed_mps > 1e-6:
+            clipped_speed_mps = min(speed_mps, self._velocity_vec_max_speed_mps)
+            scaled_length_m = (
+                clipped_speed_mps
+                / self._velocity_vec_max_speed_mps
+                * self._velocity_vec_max_len_m
+            )
+            velocity_vector = velocity / speed_mps * scaled_length_m
+        else:
+            velocity_vector = np.zeros(3)
+
+        label = f"{speed_mps:.2f} m/s"
+        radius = 0.01
+        rr.log(
+            "world/drone/velocity_vector",
+            rr.Arrows3D(
+                origins=np.array([position]),
+                vectors=np.array([velocity_vector]),
+                colors=self._velocity_vec_color,
+                labels=[label],
+                radii=radius,
+            ),
+        )
 
     def log_ref_traj(self, traj_pos: np.ndarray):
         if hasattr(self, "_cached_ref_traj_pos"):
